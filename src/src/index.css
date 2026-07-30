@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-surface text-ink antialiased font-sans;
+  font-weight: 400;
+}
+
+h1, h2, h3 {
+  font-weight: 700;
+}
+
+:focus-visible {
+  @apply outline-none ring-2 ring-brand ring-offset-2;
+}
+
+/* Scroll suave para el wizard de publicación y anclas de la landing */
+html {
+  scroll-behavior: smooth;
+}
