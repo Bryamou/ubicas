@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { getPublicImageUrl } from '@/lib/storage';
 import type {
   Property,
   PropertyImage,
@@ -61,7 +62,7 @@ async function attachCovers(properties: Property[]): Promise<OwnerPropertyRow[]>
   return properties.map((p) => ({
     ...p,
     coverImageUrl: coverMap.has(p.id)
-      ? supabase.storage.from('property-images').getPublicUrl(coverMap.get(p.id)!).data.publicUrl
+      ? getPublicImageUrl(coverMap.get(p.id)!)
       : null,
     viewsCount: viewsMap.get(p.id) ?? 0,
     contactsCount: contactsMap.get(p.id) ?? 0,

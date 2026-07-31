@@ -7,7 +7,7 @@ export function HeroBackground() {
       <img src="/hero-bg.jpg" alt="" className="h-full w-full object-cover" />
       {/* Tinte tenue: un poco más oscuro a la izquierda (donde va el texto
        * y el buscador) y prácticamente transparente hacia la derecha. */}
-      <div className="absolute inset-0 bg-black/65" />
+      <div className="absolute inset-0 bg-black/35" />
     </div>
   );
 }

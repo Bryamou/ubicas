@@ -3,6 +3,11 @@ import { supabase } from './supabase';
 const BUCKET = 'property-images';
 
 export function getPublicImageUrl(storagePath: string) {
+  // Si ya es una URL completa (ej. imágenes dummy de demo hospedadas afuera),
+  // se devuelve tal cual en vez de intentar resolverla contra el bucket.
+  if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
+    return storagePath;
+  }
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(storagePath);
   return data.publicUrl;
 }
