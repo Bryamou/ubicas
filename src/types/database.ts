@@ -35,6 +35,7 @@ export interface Property {
   lng: number | null;
   price: number;
   currency: string;
+  original_price: number | null;
   area_m2: number | null;
   bedrooms: number | null;
   bathrooms: number | null;

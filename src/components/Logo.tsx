@@ -12,7 +12,7 @@ interface LogoProps {
 export function Logo({ className = '', height = 32 }: LogoProps) {
   return (
     <img
-      src="/logo.png"
+      src="/logo-ubicas.png"
       alt="Ubicas"
       style={{ height }}
       className={`w-auto select-none ${className}`}

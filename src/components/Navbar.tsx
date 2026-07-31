@@ -1,6 +1,6 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Menu, X, MessageCircle } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type MouseEvent } from 'react';
 import { Logo } from './Logo';
 import { NotificationBell } from './NotificationBell';
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,6 +14,7 @@ const dashboardPathByRole: Record<string, string> = {
 export function Navbar() {
   const { session, profile, signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [open, setOpen] = useState(false);
 
   const handleSignOut = async () => {
@@ -21,33 +22,49 @@ export function Navbar() {
     navigate('/');
   };
 
+  // "Cómo funciona" no es una página aparte: si ya estamos en el Home hace
+  // scroll suave a la sección; si estamos en otra ruta, navega al Home con
+  // el hash y el navegador hace el scroll al cargar (html tiene
+  // scroll-behavior: smooth).
+  const handleComoFunciona = (e: MouseEvent) => {
+    e.preventDefault();
+    setOpen(false);
+    if (location.pathname === '/') {
+      document.getElementById('como-funciona')?.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      navigate('/#como-funciona');
+    }
+  };
+
   const links = [
     { label: 'Inmuebles', to: '/inmuebles' },
-    { label: 'Cómo funciona', to: '/#como-funciona' },
-    { label: 'Para agentes', to: '/#para-agentes' },
     { label: 'Requerimientos', to: '/requerimientos' },
+    { label: 'Cómo funciona', to: '/#como-funciona', onClick: handleComoFunciona },
   ];
 
   return (
     <header className="sticky top-0 z-40 border-b border-surface-muted bg-white/95 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link to="/">
-          <Logo />
-        </Link>
+      <div className="mx-auto flex h-20 max-w-7xl items-center px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center gap-8">
+          <Link to="/">
+            <Logo height={42} />
+          </Link>
 
-        <nav className="hidden items-center gap-6 md:flex">
-          {links.map((l) => (
-            <Link
-              key={l.to}
-              to={l.to}
-              className="text-sm font-medium text-ink-light hover:text-brand"
-            >
-              {l.label}
-            </Link>
-          ))}
-        </nav>
+          <nav className="hidden items-center gap-6 md:flex">
+            {links.map((l) => (
+              <Link
+                key={l.label}
+                to={l.to}
+                onClick={l.onClick}
+                className="text-sm font-medium text-ink-light hover:text-brand"
+              >
+                {l.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
 
-        <div className="hidden items-center gap-3 md:flex">
+        <div className="ml-auto hidden items-center gap-3 md:flex">
           {session && profile ? (
             <>
               <Link
@@ -95,7 +112,7 @@ export function Navbar() {
         </div>
 
         <button
-          className="md:hidden"
+          className="ml-auto md:hidden"
           onClick={() => setOpen((v) => !v)}
           aria-label="Abrir menú"
         >
@@ -107,7 +124,7 @@ export function Navbar() {
         <div className="border-t border-surface-muted bg-white px-4 py-4 md:hidden">
           <div className="flex flex-col gap-3">
             {links.map((l) => (
-              <Link key={l.to} to={l.to} onClick={() => setOpen(false)} className="text-sm font-medium">
+              <Link key={l.label} to={l.to} onClick={l.onClick ?? (() => setOpen(false))} className="text-sm font-medium">
                 {l.label}
               </Link>
             ))}

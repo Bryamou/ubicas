@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ClipboardList } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -22,6 +23,7 @@ const typeLabels: Record<string, string> = {
 
 export function RequirementsListPage() {
   const { profile } = useAuth();
+  const [searchParams] = useSearchParams();
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [loading, setLoading] = useState(true);
   const [proposalTarget, setProposalTarget] = useState<Requirement | null>(null);
@@ -30,18 +32,39 @@ export function RequirementsListPage() {
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [sentTo, setSentTo] = useState<Set<string>>(new Set());
 
+  const operation = searchParams.get('operation');
+  const district = searchParams.get('district');
+  const type = searchParams.get('type');
+  const minBudget = searchParams.get('minBudget');
+  const maxBudget = searchParams.get('maxBudget');
+  const bedrooms = searchParams.get('bedrooms');
+
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const { data } = await supabase
-        .from('requirements')
-        .select('*')
-        .eq('status', 'active')
-        .order('created_at', { ascending: false });
+      let query = supabase.from('requirements').select('*').eq('status', 'active');
+
+      if (operation) query = query.eq('operation', operation as 'sale' | 'rent');
+      if (type) {
+        const typeList = type.split(',').filter(Boolean);
+        query =
+          typeList.length > 1
+            ? query.in('property_type', typeList as Requirement['property_type'][])
+            : query.eq('property_type', type as Requirement['property_type']);
+      }
+      if (district) {
+        const districtList = district.split(',').filter(Boolean);
+        query = districtList.length > 1 ? query.in('district', districtList) : query.ilike('district', `%${district}%`);
+      }
+      if (minBudget) query = query.gte('max_budget', Number(minBudget));
+      if (maxBudget) query = query.lte('max_budget', Number(maxBudget));
+      if (bedrooms) query = query.gte('bedrooms', Number(bedrooms));
+
+      const { data } = await query.order('created_at', { ascending: false });
       setRequirements((data as Requirement[]) ?? []);
       setLoading(false);
     })();
-  }, []);
+  }, [operation, district, type, minBudget, maxBudget, bedrooms]);
 
   const submitProposal = async () => {
     if (!proposalTarget || !profile || !pitch.trim()) return;
