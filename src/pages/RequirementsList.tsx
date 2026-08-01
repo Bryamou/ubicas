@@ -240,6 +240,29 @@ export function RequirementsListPage() {
 
   const filtersPanelContent = (
     <div className="flex flex-col gap-5">
+      {/* En móvil, tipo/presupuesto/ordenar viven aquí (no en la barra)
+          para no saturar la pantalla. Desde tablet ya están en la barra
+          principal, así que se ocultan para no duplicar. */}
+      <div className="flex flex-col gap-5 border-b border-border pb-5 sm:hidden">
+        <div>
+          <p className="mb-1.5 text-sm font-semibold text-ink">Tipo de inmueble</p>
+          <MultiSelectDropdown
+            options={propertyTypeOptions}
+            selected={selectedTypes.length > 0 ? selectedTypes : propertyTypeOptions.map((o) => o.value)}
+            onChange={(v) => setParam('type', v.length === propertyTypeOptions.length ? [] : v)}
+            placeholder="Tipo de inmueble"
+          />
+        </div>
+        <div>
+          <p className="mb-1.5 text-sm font-semibold text-ink">Presupuesto</p>
+          <PricePopover currency="PEN" minPrice={minBudget} maxPrice={maxBudget} onApply={applyBudget} onClear={clearBudget} />
+        </div>
+        <div>
+          <p className="mb-1.5 text-sm font-semibold text-ink">Ordenar</p>
+          <SortDropdown options={sortOptions} value={sort} onChange={(v) => setParam('sort', v)} />
+        </div>
+      </div>
+
       <Select
         label="Dormitorios"
         options={[
@@ -363,7 +386,7 @@ export function RequirementsListPage() {
             <ZoneMultiSelect selected={selectedDistricts} onChange={(v) => setParam('district', v)} />
           </div>
 
-          <div className="w-full sm:min-w-[160px] sm:flex-1">
+          <div className="hidden w-full sm:block sm:min-w-[160px] sm:flex-1">
             <MultiSelectDropdown
               options={propertyTypeOptions}
               selected={selectedTypes.length > 0 ? selectedTypes : propertyTypeOptions.map((o) => o.value)}
@@ -372,11 +395,11 @@ export function RequirementsListPage() {
             />
           </div>
 
-          <div className="w-full sm:w-44">
+          <div className="hidden w-full sm:block sm:w-44">
             <PricePopover currency="PEN" minPrice={minBudget} maxPrice={maxBudget} onApply={applyBudget} onClear={clearBudget} />
           </div>
 
-          <div className="w-full sm:w-52">
+          <div className="hidden w-full sm:block sm:w-52">
             <SortDropdown options={sortOptions} value={sort} onChange={(v) => setParam('sort', v)} />
           </div>
 

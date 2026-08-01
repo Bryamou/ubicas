@@ -292,6 +292,29 @@ export function PropertyListPage() {
 
   const filtersPanelContent = (
     <div className="flex flex-col gap-5">
+      {/* En móvil, tipo/precio/ordenar viven aquí (no en la barra) para no
+          saturar la pantalla. Desde tablet en adelante ya están en la
+          barra principal, así que se ocultan para no duplicar. */}
+      <div className="flex flex-col gap-5 border-b border-border pb-5 sm:hidden">
+        <div>
+          <p className="mb-1.5 text-sm font-semibold text-ink">Tipo de inmueble</p>
+          <MultiSelectDropdown
+            options={propertyTypeOptions}
+            selected={selectedTypes}
+            onChange={(v) => setParam('type', v.length === propertyTypeOptions.length ? [] : v)}
+            placeholder="Tipo de inmueble"
+          />
+        </div>
+        <div>
+          <p className="mb-1.5 text-sm font-semibold text-ink">Precio</p>
+          <PricePopover currency={priceCurrency} minPrice={minPrice} maxPrice={maxPrice} onApply={applyPrice} onClear={clearPrice} />
+        </div>
+        <div>
+          <p className="mb-1.5 text-sm font-semibold text-ink">Ordenar</p>
+          <SortDropdown options={sortOptions} value={sort} onChange={(v) => setParam('sort', v)} />
+        </div>
+      </div>
+
       <Select
         label="Dormitorios"
         options={[
@@ -420,7 +443,7 @@ export function PropertyListPage() {
             <ZoneMultiSelect selected={selectedDistricts} onChange={(v) => setParam('district', v)} />
           </div>
 
-          <div className="w-full sm:min-w-[160px] sm:flex-1">
+          <div className="hidden w-full sm:block sm:min-w-[160px] sm:flex-1">
             <MultiSelectDropdown
               options={propertyTypeOptions}
               selected={selectedTypes}
@@ -429,7 +452,7 @@ export function PropertyListPage() {
             />
           </div>
 
-          <div className="w-full sm:w-44">
+          <div className="hidden w-full sm:block sm:w-44">
             <PricePopover
               currency={priceCurrency}
               minPrice={minPrice}
@@ -439,7 +462,7 @@ export function PropertyListPage() {
             />
           </div>
 
-          <div className="w-full sm:w-44">
+          <div className="hidden w-full sm:block sm:w-44">
             <SortDropdown options={sortOptions} value={sort} onChange={(v) => setParam('sort', v)} />
           </div>
 
