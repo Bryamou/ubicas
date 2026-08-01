@@ -3,9 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search as SearchIcon, Home, Handshake, Check, Users } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
 import { HeroBackground } from '@/components/HeroBackground';
-import { DistrictMultiSelect } from '@/components/DistrictMultiSelect';
-import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
-import { PriceInput } from '@/components/PriceInput';
+import { ZoneMultiSelect } from '@/components/ZoneMultiSelect';
 import { Carousel } from '@/components/Carousel';
 import { FeaturedPropertyCard } from '@/components/ui/FeaturedPropertyCard';
 import { SkeletonCard } from '@/components/ui/LoadingState';
@@ -20,15 +18,6 @@ interface FeaturedProperty extends Property {
 
 type SearchMode = 'property' | 'requirement';
 
-const propertyTypeOptions = [
-  { value: 'apartment', label: 'Departamento' },
-  { value: 'house', label: 'Casa' },
-  { value: 'office', label: 'Oficina' },
-  { value: 'land', label: 'Terreno' },
-  { value: 'commercial', label: 'Local comercial' },
-  { value: 'other', label: 'Otro' },
-];
-
 const selectClass = 'h-11 w-full rounded-input border border-border bg-white px-3 text-sm text-ink';
 
 export function LandingPage() {
@@ -37,11 +26,9 @@ export function LandingPage() {
 
   const [mode, setMode] = useState<SearchMode>('property');
 
-  // Buscador (4 campos + botón, comparten estado según el modo activo)
+  // Buscador del Hero: solo operación + zona
   const [operation, setOperation] = useState('sale');
-  const [types, setTypes] = useState<string[]>(propertyTypeOptions.map((o) => o.value));
   const [districts, setDistricts] = useState<string[]>([]);
-  const [amount, setAmount] = useState<number | null>(null);
 
   const [featured, setFeatured] = useState<FeaturedProperty[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
@@ -100,19 +87,11 @@ export function LandingPage() {
     e.preventDefault();
     const params = new URLSearchParams();
     params.set('operation', operation);
-    if (types.length > 0 && types.length < propertyTypeOptions.length) {
-      params.set('type', types.join(','));
-    }
     if (districts.length > 0) params.set('district', districts.join(','));
 
     if (mode === 'property') {
-      if (amount) {
-        params.set('maxPrice', String(amount));
-        params.set('currency', 'PEN');
-      }
       navigate(`/inmuebles?${params.toString()}`);
     } else {
-      if (amount) params.set('maxBudget', String(amount));
       navigate(`/requerimientos?${params.toString()}`);
     }
   };
@@ -124,42 +103,44 @@ export function LandingPage() {
       {/* Hero + buscador */}
       <section className="relative bg-ink text-white">
         <HeroBackground />
-        <div className="relative mx-auto max-w-content px-4 py-20 sm:px-6 lg:px-8">
-          <h1 className="max-w-2xl text-4xl font-extrabold leading-tight sm:text-5xl">
-            Comprar, vender y alquilar propiedades{' '}
-            <span className="text-brand">nunca fue tan fácil</span>.
-          </h1>
+        <div className="relative mx-auto flex max-w-content flex-col items-center px-4 py-28 text-center sm:px-6 lg:px-8">
+          <h1 className="text-4xl font-extrabold leading-tight sm:text-5xl">¿Qué estás buscando?</h1>
 
-          <p className="mt-8 text-sm font-semibold uppercase tracking-[0.03em] text-white/70">
-            ¿Qué deseas encontrar?
-          </p>
-
-          {/* Segmented control (selector de perfil) */}
-          <div className="mt-3 inline-flex h-11 items-center rounded-full bg-white/10 p-1">
+          {/* Selector de perfil: busco inmuebles o busco clientes, cada uno
+              con su propio texto explicativo debajo. Mismo tamaño fijo
+              para ambos, sin importar el largo del texto. */}
+          <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:gap-5">
             <button
               type="button"
               onClick={() => setMode('property')}
-              className={`flex h-full items-center gap-2 rounded-full px-4 text-sm font-semibold transition ${
-                mode === 'property' ? 'bg-brand text-white' : 'text-white/70 hover:text-white'
+              className={`flex w-full flex-col items-center gap-1.5 rounded-card border-2 px-6 py-4 text-center transition sm:w-64 ${
+                mode === 'property' ? 'border-brand bg-brand/10' : 'border-white/20 hover:border-white/40'
               }`}
             >
-              <Home size={15} /> Inmuebles
+              <span className="flex items-center gap-2 text-base font-bold">
+                <Home size={18} /> Inmuebles
+              </span>
+              <span className="flex min-h-[2.5rem] items-center text-sm text-white/70">Propiedades para comprar o alquilar.</span>
             </button>
+
             <button
               type="button"
               onClick={() => setMode('requirement')}
-              className={`flex h-full items-center gap-2 rounded-full px-4 text-sm font-semibold transition ${
-                mode === 'requirement' ? 'bg-brand text-white' : 'text-white/70 hover:text-white'
+              className={`flex w-full flex-col items-center gap-1.5 rounded-card border-2 px-6 py-4 text-center transition sm:w-64 ${
+                mode === 'requirement' ? 'border-brand bg-brand/10' : 'border-white/20 hover:border-white/40'
               }`}
             >
-              <Users size={15} /> Clientes
+              <span className="flex items-center gap-2 text-base font-bold">
+                <Users size={18} /> Clientes
+              </span>
+              <span className="flex min-h-[2.5rem] items-center text-sm text-white/70">Personas que buscan comprar o alquilar un inmueble</span>
             </button>
           </div>
 
-          {/* Buscador: 4 campos + botón, en una sola fila en escritorio */}
+          {/* Buscador: solo operación + zona, según lo pedido */}
           <form
             onSubmit={handleSearch}
-            className="mt-4 grid gap-3 rounded-xl bg-white p-4 text-ink shadow-lg sm:grid-cols-2 lg:grid-cols-[0.8fr_0.8fr_1.6fr_0.9fr_auto]"
+            className="mt-6 grid w-full gap-3 rounded-xl bg-white p-4 text-left text-ink shadow-lg sm:grid-cols-[0.6fr_1.6fr_auto]"
           >
             <select value={operation} onChange={(e) => setOperation(e.target.value)} className={selectClass}>
               {mode === 'property' ? (
@@ -175,28 +156,15 @@ export function LandingPage() {
               )}
             </select>
 
-            <MultiSelectDropdown
-              options={propertyTypeOptions}
-              selected={types}
-              onChange={setTypes}
-              placeholder="Tipo de inmueble"
-            />
-
-            <DistrictMultiSelect
+            <ZoneMultiSelect
               selected={districts}
               onChange={setDistricts}
-              placeholder={mode === 'property' ? 'Distrito o dirección' : 'Zona buscada por tu cliente'}
-            />
-
-            <PriceInput
-              placeholder="Monto en S/"
-              forceCurrency="PEN"
-              onValueChange={(value) => setAmount(value)}
+              placeholder={mode === 'property' ? 'Ingresa departamentos o distritos' : 'Zona buscada por tu cliente'}
             />
 
             <button
               type="submit"
-              className="flex items-center justify-center gap-2 rounded-input bg-brand px-5 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+              className="flex h-11 items-center justify-center gap-2 self-start rounded-input bg-brand px-5 text-sm font-semibold text-white hover:bg-brand-hover"
             >
               <SearchIcon size={16} /> Buscar
             </button>
@@ -267,7 +235,7 @@ export function LandingPage() {
               </li>
               <li className="flex gap-2">
                 <Check size={16} className="mt-0.5 shrink-0 text-success" />
-                Descubre requerimientos activos de clientes que calzan con tu cartera
+                Descubre clientes activos que buscan un inmueble como el tuyo
               </li>
               <li className="flex gap-2">
                 <Check size={16} className="mt-0.5 shrink-0 text-success" />
@@ -278,7 +246,7 @@ export function LandingPage() {
               onClick={() => navigate('/requerimientos')}
               className="mt-5 text-left text-sm font-semibold text-brand hover:underline"
             >
-              Ver requerimientos activos →
+              Ver clientes activos →
             </button>
           </div>
 

@@ -4,8 +4,10 @@ import { Check } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { uploadPropertyImage, getPublicImageUrl } from '@/lib/storage';
+import { getDistrictCoords } from '@/lib/limaDistricts';
 import { Navbar } from '@/components/Navbar';
 import { Input } from '@/components/ui/Input';
+import { ZoneMultiSelect } from '@/components/ZoneMultiSelect';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { ImageUpload, type UploadedImage } from '@/components/ui/ImageUpload';
@@ -224,39 +226,49 @@ export function PublishWizardPage() {
   };
   const goBack = () => setStep((s) => Math.max(s - 1, 0));
 
-  const buildPayload = (status: 'draft' | 'published') => ({
-    owner_id: profile!.id,
-    operation: form.operation,
-    property_type: form.property_type,
-    title: form.title.trim(),
-    district: form.district.trim(),
-    address: form.address.trim() || null,
-    hide_exact_address: form.hide_exact_address,
-    price: Number(form.price) || 0,
-    currency: form.currency,
-    negotiable: form.negotiable,
-    area_m2: form.area_m2 ? Number(form.area_m2) : null,
-    area_built_m2: form.area_built_m2 ? Number(form.area_built_m2) : null,
-    bedrooms: form.bedrooms ? Number(form.bedrooms) : null,
-    bathrooms: form.bathrooms ? Number(form.bathrooms) : null,
-    parking_spots: form.parking_spots ? Number(form.parking_spots) : null,
-    age_years: form.age_years ? Number(form.age_years) : null,
-    floor_number: form.floor_number ? Number(form.floor_number) : null,
-    total_floors: form.total_floors ? Number(form.total_floors) : null,
-    pets_allowed: form.pets_allowed,
-    furnished: form.furnished,
-    description: form.description.trim(),
-    highlights: form.highlights.trim() || null,
-    terms: form.terms.trim() || null,
-    additional_info: form.additional_info.trim() || null,
-    contact_name: form.contact_name.trim(),
-    contact_phone: form.contact_phone.trim() || null,
-    contact_email: form.contact_email.trim() || null,
-    contact_preference: form.contact_preference,
-    contact_hours: form.contact_hours.trim() || null,
-    status,
-    published_at: status === 'published' ? new Date().toISOString() : null,
-  });
+  const buildPayload = (status: 'draft' | 'published') => {
+    // Ubica el pin en el centro del distrito con una pequeña variación
+    // aleatoria (~500m) para que inmuebles del mismo distrito no se apilen
+    // exactamente en el mismo punto del mapa.
+    const base = getDistrictCoords(form.district);
+    const jitter = () => (Math.random() - 0.5) * 0.01;
+
+    return {
+      owner_id: profile!.id,
+      operation: form.operation,
+      property_type: form.property_type,
+      title: form.title.trim(),
+      district: form.district.trim(),
+      address: form.address.trim() || null,
+      hide_exact_address: form.hide_exact_address,
+      lat: base.lat + jitter(),
+      lng: base.lng + jitter(),
+      price: Number(form.price) || 0,
+      currency: form.currency,
+      negotiable: form.negotiable,
+      area_m2: form.area_m2 ? Number(form.area_m2) : null,
+      area_built_m2: form.area_built_m2 ? Number(form.area_built_m2) : null,
+      bedrooms: form.bedrooms ? Number(form.bedrooms) : null,
+      bathrooms: form.bathrooms ? Number(form.bathrooms) : null,
+      parking_spots: form.parking_spots ? Number(form.parking_spots) : null,
+      age_years: form.age_years ? Number(form.age_years) : null,
+      floor_number: form.floor_number ? Number(form.floor_number) : null,
+      total_floors: form.total_floors ? Number(form.total_floors) : null,
+      pets_allowed: form.pets_allowed,
+      furnished: form.furnished,
+      description: form.description.trim(),
+      highlights: form.highlights.trim() || null,
+      terms: form.terms.trim() || null,
+      additional_info: form.additional_info.trim() || null,
+      contact_name: form.contact_name.trim(),
+      contact_phone: form.contact_phone.trim() || null,
+      contact_email: form.contact_email.trim() || null,
+      contact_preference: form.contact_preference,
+      contact_hours: form.contact_hours.trim() || null,
+      status,
+      published_at: status === 'published' ? new Date().toISOString() : null,
+    };
+  };
 
   const persistFeaturesAndImages = async (propertyId: string) => {
     // Amenidades: reemplaza todas
@@ -398,13 +410,16 @@ export function PublishWizardPage() {
                 onChange={(e) => update('title', e.target.value)}
                 error={errors.title}
               />
-              <Input
-                label="Distrito o zona"
-                placeholder="Ej. Miraflores"
-                value={form.district}
-                onChange={(e) => update('district', e.target.value)}
-                error={errors.district}
-              />
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-ink">Distrito o zona</label>
+                <ZoneMultiSelect
+                  selected={form.district ? [form.district] : []}
+                  onChange={(v) => update('district', v[0] ?? '')}
+                  single
+                  placeholder="Ej. Miraflores"
+                />
+                {errors.district && <span className="mt-1 block text-xs font-medium text-red-600">{errors.district}</span>}
+              </div>
               <Input
                 label="Dirección exacta"
                 placeholder="Ej. Av. Larco 123"

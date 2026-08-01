@@ -1,134 +1,118 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Check } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { Home, Building2, Briefcase, Trees, Store, MoreHorizontal, Check, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { uploadPropertyImage, getPublicImageUrl } from '@/lib/storage';
 import { getDistrictCoords } from '@/lib/limaDistricts';
 import { Navbar } from '@/components/Navbar';
+import { WizardStepper } from '@/components/WizardStepper';
+import { ToggleGroup } from '@/components/ToggleGroup';
+import { CardSelect } from '@/components/CardSelect';
+import { ZoneMultiSelect } from '@/components/ZoneMultiSelect';
+import { PriceInput } from '@/components/PriceInput';
+import { NumberStepper } from '@/components/NumberStepper';
+import { PropertyMapView } from '@/components/PropertyMapView';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { ImageUpload, type UploadedImage } from '@/components/ui/ImageUpload';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
+import { PropertyCard } from '@/components/ui/PropertyCard';
 import type { OperationType, PropertyType } from '@/types/database';
 
-const STEPS = ['Información principal', 'Características', 'Descripción', 'Fotos', 'Contacto y publicación'];
+const STEPS = ['Datos principales', 'Descripción', 'Publicación'];
 
-const AMENITIES = ['Ascensor', 'Seguridad', 'Áreas verdes', 'Piscina', 'Gimnasio', 'Terraza', 'Depósito', 'Otros'];
-
-const propertyTypeOptions: { value: PropertyType; label: string }[] = [
-  { value: 'apartment', label: 'Departamento' },
-  { value: 'house', label: 'Casa' },
-  { value: 'land', label: 'Terreno' },
-  { value: 'office', label: 'Oficina' },
-  { value: 'commercial', label: 'Local comercial' },
-  { value: 'other', label: 'Otro' },
+const propertyTypeOptions: { value: PropertyType; label: string; icon: typeof Home }[] = [
+  { value: 'apartment', label: 'Departamento', icon: Building2 },
+  { value: 'house', label: 'Casa', icon: Home },
+  { value: 'office', label: 'Oficina', icon: Briefcase },
+  { value: 'land', label: 'Terreno', icon: Trees },
+  { value: 'commercial', label: 'Local', icon: Store },
+  { value: 'other', label: 'Otro', icon: MoreHorizontal },
 ];
+
+const ageOptions = [
+  { value: '', label: 'Antigüedad' },
+  { value: '0', label: 'A estrenar' },
+  { value: '3', label: '1 a 5 años' },
+  { value: '8', label: '6 a 10 años' },
+  { value: '15', label: '11 a 20 años' },
+  { value: '25', label: 'Más de 20 años' },
+];
+
+const AMENITIES = ['Piscina', 'Terraza', 'Ascensor', 'Balcón', 'Jardín', 'Seguridad', 'Depósito', 'Mascotas', 'Gimnasio'];
+
+const typeLabels: Record<string, string> = {
+  apartment: 'Departamento',
+  house: 'Casa',
+  office: 'Oficina',
+  land: 'Terreno',
+  commercial: 'Local',
+  other: 'Otro',
+};
 
 interface FormData {
   operation: OperationType;
-  property_type: PropertyType;
-  title: string;
-  district: string;
-  address: string;
-  hide_exact_address: boolean;
+  propertyType: PropertyType;
+  district: string[];
   price: string;
   currency: 'PEN' | 'USD';
-  negotiable: boolean;
-
-  area_m2: string;
-  area_built_m2: string;
-  bedrooms: string;
-  bathrooms: string;
-  parking_spots: string;
-  age_years: string;
-  floor_number: string;
-  total_floors: string;
-  pets_allowed: boolean;
-  furnished: boolean;
+  areaTotal: string;
+  areaBuilt: string;
+  bedrooms: number;
+  bathrooms: number;
+  parking: number;
+  floor: string;
+  age: string;
   amenities: string[];
-
   description: string;
-  highlights: string;
-  terms: string;
-  additional_info: string;
-
-  contact_name: string;
-  contact_phone: string;
-  contact_email: string;
-  contact_preference: 'call' | 'whatsapp' | 'email';
-  contact_hours: string;
-  accepted_terms: boolean;
 }
 
 const initialForm: FormData = {
   operation: 'sale',
-  property_type: 'apartment',
-  title: '',
-  district: '',
-  address: '',
-  hide_exact_address: false,
+  propertyType: 'apartment',
+  district: [],
   price: '',
   currency: 'PEN',
-  negotiable: false,
-  area_m2: '',
-  area_built_m2: '',
-  bedrooms: '',
-  bathrooms: '',
-  parking_spots: '',
-  age_years: '',
-  floor_number: '',
-  total_floors: '',
-  pets_allowed: false,
-  furnished: false,
+  areaTotal: '',
+  areaBuilt: '',
+  bedrooms: 0,
+  bathrooms: 0,
+  parking: 0,
+  floor: '',
+  age: '',
   amenities: [],
   description: '',
-  highlights: '',
-  terms: '',
-  additional_info: '',
-  contact_name: '',
-  contact_phone: '',
-  contact_email: '',
-  contact_preference: 'whatsapp',
-  contact_hours: '',
-  accepted_terms: false,
 };
 
-// Detección simple de datos personales dentro de la descripción (HU-02, paso 3)
-function containsPersonalData(text: string) {
-  const phoneRegex = /(\+?\d[\d\s-]{7,}\d)/;
-  const emailRegex = /[\w.-]+@[\w.-]+\.\w+/;
-  return phoneRegex.test(text) || emailRegex.test(text);
-}
-
 export function PublishWizardPage() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const editId = searchParams.get('edit');
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormData>(initialForm);
   const [images, setImages] = useState<UploadedImage[]>([]);
+  const [propertyId, setPropertyId] = useState<string | null>(editId);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loadingExisting, setLoadingExisting] = useState(!!editId);
-  const [saving, setSaving] = useState<'draft' | 'publish' | null>(null);
-  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [published, setPublished] = useState(false);
+  const [autosaveLabel, setAutosaveLabel] = useState('');
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipNextAutosave = useRef(!!editId);
 
-  const update = <K extends keyof FormData>(key: K, value: FormData[K]) =>
-    setForm((f) => ({ ...f, [key]: value }));
+  const update = <K extends keyof FormData>(key: K, value: FormData[K]) => setForm((f) => ({ ...f, [key]: value }));
 
-  // Precarga en modo edición
+  // Carga un borrador existente (?edit=)
   useEffect(() => {
     if (!editId) return;
     (async () => {
       const { data: property } = await supabase.from('properties').select('*').eq('id', editId).single();
-      const { data: features } = await supabase
-        .from('property_features')
-        .select('feature')
-        .eq('property_id', editId);
+      const { data: features } = await supabase.from('property_features').select('feature').eq('property_id', editId);
       const { data: existingImages } = await supabase
         .from('property_images')
         .select('*')
@@ -138,35 +122,19 @@ export function PublishWizardPage() {
       if (property) {
         setForm({
           operation: property.operation,
-          property_type: property.property_type,
-          title: property.title ?? '',
-          district: property.district ?? '',
-          address: property.address ?? '',
-          hide_exact_address: property.hide_exact_address ?? false,
-          price: property.price?.toString() ?? '',
+          propertyType: property.property_type,
+          district: property.district ? [property.district] : [],
+          price: property.price ? String(property.price) : '',
           currency: property.currency ?? 'PEN',
-          negotiable: property.negotiable ?? false,
-          area_m2: property.area_m2?.toString() ?? '',
-          area_built_m2: property.area_built_m2?.toString() ?? '',
-          bedrooms: property.bedrooms?.toString() ?? '',
-          bathrooms: property.bathrooms?.toString() ?? '',
-          parking_spots: property.parking_spots?.toString() ?? '',
-          age_years: property.age_years?.toString() ?? '',
-          floor_number: property.floor_number?.toString() ?? '',
-          total_floors: property.total_floors?.toString() ?? '',
-          pets_allowed: property.pets_allowed ?? false,
-          furnished: property.furnished ?? false,
+          areaTotal: property.area_m2?.toString() ?? '',
+          areaBuilt: property.area_built_m2?.toString() ?? '',
+          bedrooms: property.bedrooms ?? 0,
+          bathrooms: property.bathrooms ?? 0,
+          parking: property.parking_spots ?? 0,
+          floor: property.floor_number?.toString() ?? '',
+          age: property.age_years != null ? String(property.age_years) : '',
           amenities: (features ?? []).map((f) => f.feature),
           description: property.description ?? '',
-          highlights: property.highlights ?? '',
-          terms: property.terms ?? '',
-          additional_info: property.additional_info ?? '',
-          contact_name: property.contact_name ?? '',
-          contact_phone: property.contact_phone ?? '',
-          contact_email: property.contact_email ?? '',
-          contact_preference: property.contact_preference ?? 'whatsapp',
-          contact_hours: property.contact_hours ?? '',
-          accepted_terms: true,
         });
         setImages(
           (existingImages ?? []).map((img) => ({
@@ -180,97 +148,87 @@ export function PublishWizardPage() {
     })();
   }, [editId]);
 
-  const toggleAmenity = (amenity: string) => {
-    setForm((f) => ({
-      ...f,
-      amenities: f.amenities.includes(amenity)
-        ? f.amenities.filter((a) => a !== amenity)
-        : [...f.amenities, amenity],
-    }));
-  };
+  // Guardado automático de los datos principales (sin fotos/amenidades),
+  // con un breve debounce para no disparar una escritura por cada tecla.
+  useEffect(() => {
+    if (loadingExisting || published) return;
+    if (skipNextAutosave.current) {
+      skipNextAutosave.current = false;
+      return;
+    }
+    if (!profile) return;
+    if (!form.district.length && !form.price && form.description.length === 0) return;
 
-  const validateStep = (currentStep: number): boolean => {
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(async () => {
+      const zone = form.district[0] ?? '';
+      const coords = zone ? getDistrictCoords(zone) : null;
+      const title = zone
+        ? `${typeLabels[form.propertyType]} en ${form.operation === 'sale' ? 'venta' : 'alquiler'} en ${zone}`
+        : `${typeLabels[form.propertyType]} en ${form.operation === 'sale' ? 'venta' : 'alquiler'}`;
+
+      const payload = {
+        owner_id: profile.id,
+        operation: form.operation,
+        property_type: form.propertyType,
+        title,
+        district: zone,
+        lat: coords?.lat ?? null,
+        lng: coords?.lng ?? null,
+        price: Number(form.price) || 0,
+        currency: form.currency,
+        area_m2: form.areaTotal ? Number(form.areaTotal) : null,
+        area_built_m2: form.areaBuilt ? Number(form.areaBuilt) : null,
+        bedrooms: form.bedrooms,
+        bathrooms: form.bathrooms,
+        parking_spots: form.parking,
+        floor_number: form.floor ? Number(form.floor) : null,
+        age_years: form.age !== '' ? Number(form.age) : null,
+        description: form.description,
+        contact_name: profile.full_name,
+        contact_phone: profile.phone,
+        contact_email: user?.email ?? null,
+        contact_preference: 'whatsapp',
+        status: 'draft' as const,
+      };
+
+      if (propertyId) {
+        await supabase.from('properties').update(payload).eq('id', propertyId);
+      } else {
+        const { data } = await supabase.from('properties').insert(payload).select('id').single();
+        if (data) {
+          setPropertyId(data.id);
+          setSearchParams({ edit: data.id }, { replace: true });
+        }
+      }
+      setAutosaveLabel('Guardado ✓');
+      setTimeout(() => setAutosaveLabel(''), 2000);
+    }, 1200);
+
+    return () => {
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, profile, propertyId, loadingExisting, published]);
+
+  const validateStep0 = () => {
     const newErrors: Record<string, string> = {};
-
-    if (currentStep === 0) {
-      if (!form.title.trim()) newErrors.title = 'Ingresa un título para tu inmueble.';
-      if (!form.district.trim()) newErrors.district = 'Ingresa el distrito o zona.';
-      if (!form.price || Number(form.price) <= 0) newErrors.price = 'Ingresa un precio válido.';
-    }
-
-    if (currentStep === 2) {
-      if (form.description.trim().length < 100) {
-        newErrors.description = 'La descripción debe tener al menos 100 caracteres.';
-      } else if (form.description.length > 3000) {
-        newErrors.description = 'La descripción no puede superar los 3,000 caracteres.';
-      } else if (containsPersonalData(form.description)) {
-        newErrors.description = 'No incluyas teléfonos ni correos dentro de la descripción.';
-      }
-    }
-
-    if (currentStep === 4) {
-      if (!form.contact_name.trim()) newErrors.contact_name = 'Ingresa un nombre de contacto.';
-      if (!form.contact_phone.trim() && !form.contact_email.trim()) {
-        newErrors.contact_phone = 'Ingresa al menos un teléfono o correo de contacto.';
-      }
-      if (!form.accepted_terms) newErrors.accepted_terms = 'Debes aceptar los términos para publicar.';
-    }
-
+    if (form.district.length === 0) newErrors.district = 'Ingresa la ubicación del inmueble.';
+    if (!form.price || Number(form.price) <= 0) newErrors.price = 'Ingresa un precio válido.';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const goNext = () => {
-    if (validateStep(step)) setStep((s) => Math.min(s + 1, STEPS.length - 1));
-  };
-  const goBack = () => setStep((s) => Math.max(s - 1, 0));
-
-  const buildPayload = (status: 'draft' | 'published') => {
-    // Ubica el pin en el centro del distrito con una pequeña variación
-    // aleatoria (~500m) para que inmuebles del mismo distrito no se apilen
-    // exactamente en el mismo punto del mapa.
-    const base = getDistrictCoords(form.district);
-    const jitter = () => (Math.random() - 0.5) * 0.01;
-
-    return {
-      owner_id: profile!.id,
-      operation: form.operation,
-      property_type: form.property_type,
-      title: form.title.trim(),
-      district: form.district.trim(),
-      address: form.address.trim() || null,
-      hide_exact_address: form.hide_exact_address,
-      lat: base.lat + jitter(),
-      lng: base.lng + jitter(),
-      price: Number(form.price) || 0,
-      currency: form.currency,
-      negotiable: form.negotiable,
-      area_m2: form.area_m2 ? Number(form.area_m2) : null,
-      area_built_m2: form.area_built_m2 ? Number(form.area_built_m2) : null,
-      bedrooms: form.bedrooms ? Number(form.bedrooms) : null,
-      bathrooms: form.bathrooms ? Number(form.bathrooms) : null,
-      parking_spots: form.parking_spots ? Number(form.parking_spots) : null,
-      age_years: form.age_years ? Number(form.age_years) : null,
-      floor_number: form.floor_number ? Number(form.floor_number) : null,
-      total_floors: form.total_floors ? Number(form.total_floors) : null,
-      pets_allowed: form.pets_allowed,
-      furnished: form.furnished,
-      description: form.description.trim(),
-      highlights: form.highlights.trim() || null,
-      terms: form.terms.trim() || null,
-      additional_info: form.additional_info.trim() || null,
-      contact_name: form.contact_name.trim(),
-      contact_phone: form.contact_phone.trim() || null,
-      contact_email: form.contact_email.trim() || null,
-      contact_preference: form.contact_preference,
-      contact_hours: form.contact_hours.trim() || null,
-      status,
-      published_at: status === 'published' ? new Date().toISOString() : null,
-    };
+  const validateStep1 = () => {
+    const newErrors: Record<string, string> = {};
+    if (form.description.trim().length < 20) newErrors.description = 'Cuéntanos un poco más sobre el inmueble (mínimo 20 caracteres).';
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
-  const persistFeaturesAndImages = async (propertyId: string) => {
-    // Amenidades: reemplaza todas
+  const persistFeaturesAndImages = async () => {
+    if (!propertyId) return;
+
     await supabase.from('property_features').delete().eq('property_id', propertyId);
     if (form.amenities.length > 0) {
       await supabase
@@ -278,12 +236,13 @@ export function PublishWizardPage() {
         .insert(form.amenities.map((feature) => ({ property_id: propertyId, feature })));
     }
 
-    // Imágenes nuevas: subir a Storage y guardar fila
-    for (let i = 0; i < images.length; i++) {
-      const img = images[i];
+    const updatedImages = [...images];
+    for (let i = 0; i < updatedImages.length; i++) {
+      const img = updatedImages[i];
       if (img.file && !img.storagePath) {
-        const { path, error } = await uploadPropertyImage(profile!.id, propertyId, img.file);
-        if (path && !error) {
+        const { path } = await uploadPropertyImage(profile!.id, propertyId, img.file);
+        if (path) {
+          updatedImages[i] = { ...img, storagePath: path, url: getPublicImageUrl(path) };
           await supabase.from('property_images').insert({
             property_id: propertyId,
             storage_path: path,
@@ -299,207 +258,244 @@ export function PublishWizardPage() {
           .eq('storage_path', img.storagePath);
       }
     }
+    setImages(updatedImages);
   };
 
-  const handleSave = async (status: 'draft' | 'published') => {
-    if (status === 'published' && !validateStep(4)) return;
-    if (!profile) return;
-
-    setSaving(status === 'published' ? 'publish' : 'draft');
-    setFeedback(null);
-
-    try {
-      const payload = buildPayload(status);
-      let propertyId = editId;
-
-      if (propertyId) {
-        const { error } = await supabase.from('properties').update(payload).eq('id', propertyId);
-        if (error) throw error;
-      } else {
-        const { data, error } = await supabase.from('properties').insert(payload).select('id').single();
-        if (error) throw error;
-        propertyId = data.id;
-      }
-
-      await persistFeaturesAndImages(propertyId!);
-
-      setFeedback({
-        type: 'success',
-        message:
-          status === 'published'
-            ? '¡Tu inmueble fue publicado! Ya es visible en el mercado público.'
-            : 'Guardado como borrador. Puedes seguir editándolo cuando quieras.',
-      });
-
-      setTimeout(() => navigate('/panel/propietario/inmuebles'), 1500);
-    } catch (err) {
-      setFeedback({
-        type: 'error',
-        message: err instanceof Error ? err.message : 'Ocurrió un error al guardar el inmueble.',
-      });
-    } finally {
-      setSaving(null);
+  const goNext = async () => {
+    if (step === 0) {
+      if (!validateStep0()) return;
+      setStep(1);
+      return;
+    }
+    if (step === 1) {
+      if (!validateStep1()) return;
+      setSaving(true);
+      await persistFeaturesAndImages();
+      setSaving(false);
+      setStep(2);
     }
   };
 
-  const progressPercent = useMemo(() => ((step + 1) / STEPS.length) * 100, [step]);
+  const goBack = () => setStep((s) => Math.max(0, s - 1));
+
+  const handlePublish = async () => {
+    if (!propertyId) return;
+    setSaving(true);
+    const { error } = await supabase
+      .from('properties')
+      .update({ status: 'published', published_at: new Date().toISOString() })
+      .eq('id', propertyId);
+    setSaving(false);
+    if (!error) setPublished(true);
+  };
 
   if (loadingExisting) {
     return (
       <div className="min-h-screen bg-surface-muted">
         <Navbar />
-        <div className="py-24 text-center text-sm text-ink-light">Cargando inmueble…</div>
+        <div className="py-24 text-center text-sm text-ink-light">Cargando…</div>
       </div>
     );
   }
 
+  if (published) {
+    return (
+      <div className="min-h-screen bg-surface-muted">
+        <Navbar />
+        <div className="mx-auto max-w-md px-4 py-24 text-center">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-success-soft text-success">
+            <Check size={32} />
+          </div>
+          <h1 className="mt-5 text-2xl font-extrabold text-ink">¡Tu inmueble ya está publicado!</h1>
+          <p className="mt-2 text-sm text-ink-light">Ahora cualquier comprador podrá encontrarlo desde Ubicas.</p>
+          <div className="mt-8 flex flex-col gap-3">
+            <Link to={`/inmuebles/${propertyId}`}>
+              <Button variant="primary" fullWidth>
+                Ver publicación
+              </Button>
+            </Link>
+            <Button
+              variant="secondary"
+              fullWidth
+              onClick={() => {
+                setForm(initialForm);
+                setImages([]);
+                setPropertyId(null);
+                setPublished(false);
+                setStep(0);
+                skipNextAutosave.current = true;
+                setSearchParams({}, { replace: true });
+              }}
+            >
+              Publicar otro inmueble
+            </Button>
+            <Link to="/panel/propietario">
+              <Button variant="neutral" fullWidth>
+                Ir a mi panel
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const zone = form.district[0] ?? '';
+  const coords = zone ? getDistrictCoords(zone) : null;
+
+  const checklist = [
+    { label: 'Precio agregado', done: !!form.price && Number(form.price) > 0 },
+    { label: 'Ubicación completa', done: form.district.length > 0 },
+    { label: 'Fotografías cargadas', done: images.length > 0 },
+    { label: 'Descripción', done: form.description.trim().length >= 20 },
+  ];
+  const warnings: string[] = [];
+  if (images.length < 5) warnings.push('Añadir más fotografías puede aumentar el interés de los compradores.');
+  if (form.description.trim().length < 100) warnings.push('Una descripción más detallada ayuda a generar más contactos.');
+
+  const previewProperty = {
+    id: propertyId ?? 'preview',
+    owner_id: profile?.id ?? '',
+    operation: form.operation,
+    property_type: form.propertyType,
+    title: zone
+      ? `${typeLabels[form.propertyType]} en ${form.operation === 'sale' ? 'venta' : 'alquiler'} en ${zone}`
+      : `${typeLabels[form.propertyType]} en ${form.operation === 'sale' ? 'venta' : 'alquiler'}`,
+    description: form.description,
+    district: zone,
+    city: 'Lima',
+    address: null,
+    lat: coords?.lat ?? null,
+    lng: coords?.lng ?? null,
+    price: Number(form.price) || 0,
+    currency: form.currency,
+    original_price: null,
+    area_m2: form.areaTotal ? Number(form.areaTotal) : null,
+    area_built_m2: form.areaBuilt ? Number(form.areaBuilt) : null,
+    bedrooms: form.bedrooms,
+    bathrooms: form.bathrooms,
+    parking_spots: form.parking,
+    status: 'draft' as const,
+    published_at: null,
+    hide_exact_address: true,
+    negotiable: false,
+    age_years: form.age !== '' ? Number(form.age) : null,
+    floor_number: form.floor ? Number(form.floor) : null,
+    total_floors: null,
+    pets_allowed: null,
+    furnished: null,
+    highlights: null,
+    terms: null,
+    additional_info: null,
+    contact_name: profile?.full_name ?? null,
+    contact_phone: profile?.phone ?? null,
+    contact_email: user?.email ?? null,
+    contact_preference: 'whatsapp' as const,
+    contact_hours: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
   return (
     <div className="min-h-screen bg-surface-muted">
       <Navbar />
-      <div className="mx-auto max-w-3xl px-4 py-10">
-        <h1 className="text-2xl font-extrabold text-ink">
-          {editId ? 'Editar inmueble' : 'Publicar inmueble gratis'}
-        </h1>
-        <p className="mt-1 text-sm text-ink-light">Completa los 5 pasos. Puedes guardar como borrador en cualquier momento.</p>
-
-        {/* Indicador de avance */}
-        <div className="mt-6">
-          <div className="h-2 w-full overflow-hidden rounded-full bg-surface-muted">
-            <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${progressPercent}%` }} />
-          </div>
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-light">
-            {STEPS.map((label, i) => (
-              <span key={label} className={i === step ? 'font-semibold text-brand' : ''}>
-                {i + 1}. {label}
-              </span>
-            ))}
-          </div>
+      <div className="mx-auto max-w-2xl px-4 py-8">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-extrabold text-ink">Publicar inmueble</h1>
+          {autosaveLabel && <span className="text-xs font-medium text-success">{autosaveLabel}</span>}
         </div>
+        <p className="mt-1 text-sm text-ink-light">Publica en pocos minutos. Guardamos tu progreso automáticamente.</p>
 
-        {feedback && (
-          <div className="mt-4">
-            <Alert type={feedback.type === 'success' ? 'success' : 'error'}>{feedback.message}</Alert>
-          </div>
-        )}
+        <div className="mt-6">
+          <WizardStepper steps={STEPS} current={step} />
+        </div>
 
         <div className="mt-6 rounded-card border border-border bg-white p-6 shadow-card">
           {step === 0 && (
-            <div className="flex flex-col gap-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Select
-                  label="Operación"
-                  value={form.operation}
-                  onChange={(e) => update('operation', e.target.value as OperationType)}
+            <div className="flex flex-col gap-6">
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-ink">Tipo de operación</label>
+                <ToggleGroup
                   options={[
                     { value: 'sale', label: 'Venta' },
                     { value: 'rent', label: 'Alquiler' },
                   ]}
-                />
-                <Select
-                  label="Tipo de inmueble"
-                  value={form.property_type}
-                  onChange={(e) => update('property_type', e.target.value as PropertyType)}
-                  options={propertyTypeOptions}
+                  value={form.operation}
+                  onChange={(v) => update('operation', v as OperationType)}
                 />
               </div>
-              <Input
-                label="Título del inmueble"
-                placeholder="Ej. Departamento moderno con vista al parque"
-                value={form.title}
-                onChange={(e) => update('title', e.target.value)}
-                error={errors.title}
-              />
-              <Input
-                label="Distrito o zona"
-                placeholder="Ej. Miraflores"
-                value={form.district}
-                onChange={(e) => update('district', e.target.value)}
-                error={errors.district}
-              />
-              <Input
-                label="Dirección exacta"
-                placeholder="Ej. Av. Larco 123"
-                value={form.address}
-                onChange={(e) => update('address', e.target.value)}
-                hint="Puedes ocultarla de la vista pública abajo."
-              />
-              <label className="flex items-center gap-2 text-sm text-ink">
-                <input
-                  type="checkbox"
-                  checked={form.hide_exact_address}
-                  onChange={(e) => update('hide_exact_address', e.target.checked)}
-                  className="h-4 w-4 rounded border-border text-brand focus:ring-brand"
-                />
-                Ocultar dirección exacta en la vista pública
-              </label>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Input
-                  label="Precio"
-                  type="number"
-                  placeholder="0"
-                  value={form.price}
-                  onChange={(e) => update('price', e.target.value)}
-                  error={errors.price}
-                />
-                <Select
-                  label="Moneda"
-                  value={form.currency}
-                  onChange={(e) => update('currency', e.target.value as 'PEN' | 'USD')}
-                  options={[
-                    { value: 'PEN', label: 'Soles (S/)' },
-                    { value: 'USD', label: 'Dólares (US$)' },
-                  ]}
-                />
-              </div>
-              <label className="flex items-center gap-2 text-sm text-ink">
-                <input
-                  type="checkbox"
-                  checked={form.negotiable}
-                  onChange={(e) => update('negotiable', e.target.checked)}
-                  className="h-4 w-4 rounded border-border text-brand focus:ring-brand"
-                />
-                Precio negociable
-              </label>
-            </div>
-          )}
 
-          {step === 1 && (
-            <div className="flex flex-col gap-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Input label="Área total (m²)" type="number" value={form.area_m2} onChange={(e) => update('area_m2', e.target.value)} />
-                <Input label="Área construida (m²)" type="number" value={form.area_built_m2} onChange={(e) => update('area_built_m2', e.target.value)} />
-                <Input label="Dormitorios" type="number" value={form.bedrooms} onChange={(e) => update('bedrooms', e.target.value)} />
-                <Input label="Baños" type="number" value={form.bathrooms} onChange={(e) => update('bathrooms', e.target.value)} />
-                <Input label="Estacionamientos" type="number" value={form.parking_spots} onChange={(e) => update('parking_spots', e.target.value)} />
-                <Input label="Antigüedad (años)" type="number" value={form.age_years} onChange={(e) => update('age_years', e.target.value)} />
-                <Input label="Piso" type="number" value={form.floor_number} onChange={(e) => update('floor_number', e.target.value)} />
-                <Input label="Total de pisos" type="number" value={form.total_floors} onChange={(e) => update('total_floors', e.target.value)} />
-              </div>
-              <div className="flex flex-wrap gap-4">
-                <label className="flex items-center gap-2 text-sm text-ink">
-                  <input type="checkbox" checked={form.pets_allowed} onChange={(e) => update('pets_allowed', e.target.checked)} className="h-4 w-4 rounded border-border text-brand focus:ring-brand" />
-                  Mascotas permitidas
-                </label>
-                <label className="flex items-center gap-2 text-sm text-ink">
-                  <input type="checkbox" checked={form.furnished} onChange={(e) => update('furnished', e.target.checked)} className="h-4 w-4 rounded border-border text-brand focus:ring-brand" />
-                  Amoblado
-                </label>
-              </div>
               <div>
-                <p className="mb-2 text-sm font-semibold text-ink">Amenidades</p>
+                <label className="mb-2 block text-sm font-semibold text-ink">Tipo de inmueble</label>
+                <CardSelect
+                  options={propertyTypeOptions}
+                  value={form.propertyType}
+                  onChange={(v) => update('propertyType', v as PropertyType)}
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-ink">Ubicación</label>
+                <ZoneMultiSelect selected={form.district} onChange={(v) => update('district', v)} single placeholder="Busca tu distrito" />
+                {errors.district && <span className="mt-1 block text-xs font-medium text-red-600">{errors.district}</span>}
+                {zone && coords && (
+                  <div className="mt-3">
+                    <PropertyMapView
+                      height="180px"
+                      properties={[
+                        { id: 'confirm', title: zone, price: 0, currency: 'PEN', operation: form.operation, district: zone, coverImageUrl: null, ...coords },
+                      ]}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-ink">Precio</label>
+                <PriceInput
+                  placeholder="Ej. 850000 o $250000"
+                  value={form.price}
+                  initialCurrency={form.currency}
+                  onValueChange={(amount, currency) => {
+                    update('price', amount ? String(amount) : '');
+                    update('currency', currency);
+                  }}
+                />
+                {errors.price && <span className="mt-1 block text-xs font-medium text-red-600">{errors.price}</span>}
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-ink">Características principales</label>
+                <div className="flex flex-col gap-2">
+                  <NumberStepper label="Dormitorios" value={form.bedrooms} onChange={(v) => update('bedrooms', v)} />
+                  <NumberStepper label="Baños" value={form.bathrooms} onChange={(v) => update('bathrooms', v)} />
+                  <NumberStepper label="Estacionamientos" value={form.parking} onChange={(v) => update('parking', v)} />
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <Input placeholder="Área total (m²)" type="number" value={form.areaTotal} onChange={(e) => update('areaTotal', e.target.value)} />
+                  <Input placeholder="Área construida (m²)" type="number" value={form.areaBuilt} onChange={(e) => update('areaBuilt', e.target.value)} />
+                  <Input placeholder="Piso" value={form.floor} onChange={(e) => update('floor', e.target.value)} />
+                  <Select value={form.age} onChange={(e) => update('age', e.target.value)} options={ageOptions} />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-ink">Amenidades</label>
                 <div className="flex flex-wrap gap-2">
-                  {AMENITIES.map((amenity) => (
+                  {AMENITIES.map((a) => (
                     <button
                       type="button"
-                      key={amenity}
-                      onClick={() => toggleAmenity(amenity)}
+                      key={a}
+                      onClick={() =>
+                        update('amenities', form.amenities.includes(a) ? form.amenities.filter((x) => x !== a) : [...form.amenities, a])
+                      }
                       className={`rounded-full border px-3 py-1.5 text-sm font-medium transition ${
-                        form.amenities.includes(amenity)
+                        form.amenities.includes(a)
                           ? 'border-brand bg-brand-soft text-brand'
                           : 'border-border text-ink-light hover:border-brand/40'
                       }`}
                     >
-                      {amenity}
+                      {a}
                     </button>
                   ))}
                 </div>
@@ -507,113 +503,80 @@ export function PublishWizardPage() {
             </div>
           )}
 
-          {step === 2 && (
-            <div className="flex flex-col gap-4">
+          {step === 1 && (
+            <div className="flex flex-col gap-6">
               <Textarea
-                label="Descripción comercial"
+                label="Descripción"
                 value={form.description}
-                onChange={(e) => update('description', e.target.value)}
+                onChange={(e) => update('description', e.target.value.slice(0, 1000))}
                 error={errors.description}
                 showCount
-                maxLength={3000}
-                hint="Mínimo 100 caracteres. No incluyas teléfonos ni correos."
+                maxLength={1000}
+                placeholder="Describe los principales beneficios del inmueble, ubicación, iluminación, acabados y cualquier característica importante."
               />
-              <Textarea
-                label="Puntos destacados"
-                value={form.highlights}
-                onChange={(e) => update('highlights', e.target.value)}
-                hint="Ej. Cerca al parque, remodelado, con vista despejada…"
-              />
-              <Textarea
-                label="Condiciones de venta o alquiler"
-                value={form.terms}
-                onChange={(e) => update('terms', e.target.value)}
-              />
-              <Textarea
-                label="Información adicional"
-                value={form.additional_info}
-                onChange={(e) => update('additional_info', e.target.value)}
-              />
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-ink">Fotografías</label>
+                <ImageUpload images={images} onChange={setImages} recommended={10} />
+              </div>
             </div>
           )}
 
-          {step === 3 && (
-            <ImageUpload images={images} onChange={setImages} />
-          )}
+          {step === 2 && (
+            <div className="flex flex-col gap-6">
+              <div>
+                <p className="mb-2 text-sm font-semibold text-ink">Vista previa</p>
+                <div className="max-w-xs">
+                  <PropertyCard property={previewProperty as any} coverImageUrl={images[0]?.url ?? null} />
+                </div>
+              </div>
 
-          {step === 4 && (
-            <div className="flex flex-col gap-4">
-              <Input
-                label="Nombre de contacto"
-                value={form.contact_name}
-                onChange={(e) => update('contact_name', e.target.value)}
-                error={errors.contact_name}
-              />
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Input
-                  label="Teléfono"
-                  value={form.contact_phone}
-                  onChange={(e) => update('contact_phone', e.target.value)}
-                  error={errors.contact_phone}
-                />
-                <Input
-                  label="Correo"
-                  type="email"
-                  value={form.contact_email}
-                  onChange={(e) => update('contact_email', e.target.value)}
-                />
+              <div>
+                <p className="mb-2 text-sm font-semibold text-ink">Checklist</p>
+                <div className="flex flex-col gap-2">
+                  {checklist.map((item) => (
+                    <div key={item.label} className="flex items-center gap-2 text-sm">
+                      <span
+                        className={`flex h-5 w-5 items-center justify-center rounded-full ${
+                          item.done ? 'bg-success-soft text-success' : 'bg-surface-muted text-ink-light'
+                        }`}
+                      >
+                        <Check size={12} />
+                      </span>
+                      <span className={item.done ? 'text-ink' : 'text-ink-light'}>{item.label}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Select
-                  label="Preferencia de contacto"
-                  value={form.contact_preference}
-                  onChange={(e) => update('contact_preference', e.target.value as FormData['contact_preference'])}
-                  options={[
-                    { value: 'whatsapp', label: 'WhatsApp' },
-                    { value: 'call', label: 'Llamada' },
-                    { value: 'email', label: 'Correo' },
-                  ]}
-                />
-                <Input
-                  label="Horario de contacto"
-                  placeholder="Ej. Lunes a viernes, 9am - 6pm"
-                  value={form.contact_hours}
-                  onChange={(e) => update('contact_hours', e.target.value)}
-                />
-              </div>
-              <label className="flex items-start gap-2 text-sm text-ink">
-                <input
-                  type="checkbox"
-                  checked={form.accepted_terms}
-                  onChange={(e) => update('accepted_terms', e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-border text-brand focus:ring-brand"
-                />
-                Confirmo que la información es correcta y acepto los términos de publicación de Ubicas.
-              </label>
-              {errors.accepted_terms && <span className="text-xs font-medium text-red-600">{errors.accepted_terms}</span>}
+
+              {warnings.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  {warnings.map((w) => (
+                    <Alert key={w} type="warning">
+                      <span className="flex items-start gap-1.5">
+                        <AlertTriangle size={14} className="mt-0.5 shrink-0" /> {w}
+                      </span>
+                    </Alert>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+        <div className="mt-6 flex items-center justify-between gap-3">
           <Button variant="neutral" onClick={goBack} disabled={step === 0}>
-            Anterior
+            Atrás
           </Button>
-
-          <div className="flex flex-wrap gap-3">
-            <Button variant="secondary" onClick={() => handleSave('draft')} loading={saving === 'draft'}>
-              Guardar borrador
+          {step < 2 ? (
+            <Button variant="primary" onClick={goNext} loading={saving}>
+              Continuar
             </Button>
-            {step < STEPS.length - 1 ? (
-              <Button variant="primary" onClick={goNext}>
-                Siguiente
-              </Button>
-            ) : (
-              <Button variant="primary" icon={<Check size={16} />} onClick={() => handleSave('published')} loading={saving === 'publish'}>
-                Publicar inmueble
-              </Button>
-            )}
-          </div>
+          ) : (
+            <Button variant="primary" onClick={handlePublish} loading={saving}>
+              Publicar inmueble
+            </Button>
+          )}
         </div>
       </div>
     </div>

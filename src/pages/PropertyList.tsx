@@ -4,6 +4,7 @@ import { Search, List, Map as MapIcon, SlidersHorizontal } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getPublicImageUrl } from '@/lib/storage';
 import { getDistrictCoords } from '@/lib/limaDistricts';
+import { useAuth } from '@/contexts/AuthContext';
 import { Navbar } from '@/components/Navbar';
 import { PropertyCard } from '@/components/ui/PropertyCard';
 import { PropertyMapView } from '@/components/PropertyMapView';
@@ -11,9 +12,10 @@ import { SkeletonCard } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Select } from '@/components/ui/Select';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
-import { DistrictMultiSelect } from '@/components/DistrictMultiSelect';
-import { PriceInput } from '@/components/PriceInput';
-import { Drawer } from '@/components/ui/Drawer';
+import { ZoneMultiSelect } from '@/components/ZoneMultiSelect';
+import { PricePopover } from '@/components/PricePopover';
+import { SortDropdown } from '@/components/SortDropdown';
+import { FilterSidePanel } from '@/components/FilterSidePanel';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import type { OperationType, Property, PropertyType } from '@/types/database';
@@ -22,6 +24,7 @@ interface PropertyWithCover extends Property {
   coverImageUrl: string | null;
   isAgentListed: boolean;
   viewsCount?: number;
+  isFavorite?: boolean;
 }
 
 const propertyTypeOptions = [
@@ -52,6 +55,7 @@ const publishedWithinOptions = [
 ];
 
 export function PropertyListPage() {
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [properties, setProperties] = useState<PropertyWithCover[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,7 +69,7 @@ export function PropertyListPage() {
   const selectedDistricts = districtParam ? districtParam.split(',') : [];
   const maxPrice = searchParams.get('maxPrice') ?? '';
   const minPrice = searchParams.get('minPrice') ?? '';
-  const priceCurrency = searchParams.get('currency') ?? '';
+  const priceCurrency = (searchParams.get('currency') as 'PEN' | 'USD') || 'PEN';
   const bedrooms = searchParams.get('bedrooms') ?? '';
 
   // Más filtros
@@ -81,6 +85,7 @@ export function PropertyListPage() {
   const sort = searchParams.get('sort') ?? 'relevant';
 
   // Estado local del panel "Más filtros" (se aplica recién al dar "Ver resultados")
+  const [draftBedrooms, setDraftBedrooms] = useState(bedrooms);
   const [draftBathrooms, setDraftBathrooms] = useState(bathrooms);
   const [draftParking, setDraftParking] = useState(parking);
   const [draftAreaMin, setDraftAreaMin] = useState(areaMin);
@@ -90,6 +95,7 @@ export function PropertyListPage() {
   const [draftAmenities, setDraftAmenities] = useState<string[]>(selectedAmenities);
 
   const openFilters = () => {
+    setDraftBedrooms(bedrooms);
     setDraftBathrooms(bathrooms);
     setDraftParking(parking);
     setDraftAreaMin(areaMin);
@@ -103,6 +109,7 @@ export function PropertyListPage() {
   const applyFilters = () => {
     const next = new URLSearchParams(searchParams);
     const setOrDelete = (key: string, value: string) => (value ? next.set(key, value) : next.delete(key));
+    setOrDelete('bedrooms', draftBedrooms);
     setOrDelete('bathrooms', draftBathrooms);
     setOrDelete('parking', draftParking);
     setOrDelete('areaMin', draftAreaMin);
@@ -115,6 +122,7 @@ export function PropertyListPage() {
   };
 
   const clearFilters = () => {
+    setDraftBedrooms('');
     setDraftBathrooms('');
     setDraftParking('');
     setDraftAreaMin('');
@@ -124,14 +132,32 @@ export function PropertyListPage() {
     setDraftAmenities([]);
   };
 
-  const activeExtraFiltersCount = [bathrooms, parking, areaMin, areaMax, maxAge, publishedWithin].filter(Boolean)
-    .length + (selectedAmenities.length > 0 ? 1 : 0);
+  const activeExtraFiltersCount =
+    [bedrooms, bathrooms, parking, areaMin, areaMax, maxAge, publishedWithin].filter(Boolean).length +
+    (selectedAmenities.length > 0 ? 1 : 0);
 
   const setParam = (key: string, value: string | string[]) => {
     const next = new URLSearchParams(searchParams);
     const joined = Array.isArray(value) ? value.join(',') : value;
     if (!joined) next.delete(key);
     else next.set(key, joined);
+    setSearchParams(next);
+  };
+
+  const applyPrice = (currency: 'PEN' | 'USD', min: string, max: string) => {
+    const next = new URLSearchParams(searchParams);
+    const setOrDelete = (key: string, value: string) => (value ? next.set(key, value) : next.delete(key));
+    setOrDelete('currency', currency === 'PEN' ? '' : currency);
+    setOrDelete('minPrice', min);
+    setOrDelete('maxPrice', max);
+    setSearchParams(next);
+  };
+
+  const clearPrice = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('currency');
+    next.delete('minPrice');
+    next.delete('maxPrice');
     setSearchParams(next);
   };
 
@@ -148,7 +174,7 @@ export function PropertyListPage() {
       if (selectedDistricts.length > 0) query = query.in('district', selectedDistricts);
       if (maxPrice) query = query.lte('price', Number(maxPrice));
       if (minPrice) query = query.gte('price', Number(minPrice));
-      if (priceCurrency) query = query.eq('currency', priceCurrency);
+      if (searchParams.get('currency')) query = query.eq('currency', priceCurrency);
       if (bedrooms) query = query.gte('bedrooms', Number(bedrooms));
       if (bathrooms) query = query.gte('bathrooms', Number(bathrooms));
       if (parking) query = query.gte('parking_spots', Number(parking));
@@ -197,7 +223,7 @@ export function PropertyListPage() {
       }
 
       const ids = list.map((p) => p.id);
-      const [{ data: images }, { data: assignments }, { data: views }] = await Promise.all([
+      const [{ data: images }, { data: assignments }, { data: views }, { data: favs }] = await Promise.all([
         supabase
           .from('property_images')
           .select('property_id, storage_path, is_primary, sort_order')
@@ -207,7 +233,12 @@ export function PropertyListPage() {
         sort === 'most_viewed'
           ? supabase.from('property_views').select('property_id').in('property_id', ids)
           : Promise.resolve({ data: null }),
+        user
+          ? supabase.from('favorites').select('property_id').eq('user_id', user.id).in('property_id', ids)
+          : Promise.resolve({ data: null }),
       ]);
+
+      const favoriteSet = new Set((favs ?? []).map((f: any) => f.property_id));
 
       const coverMap = new Map<string, string>();
       (images ?? []).forEach((img: any) => {
@@ -225,6 +256,7 @@ export function PropertyListPage() {
         coverImageUrl: coverMap.has(p.id) ? getPublicImageUrl(coverMap.get(p.id)!) : null,
         isAgentListed: agentPropertyIds.has(p.id),
         viewsCount: viewCountMap.get(p.id) ?? 0,
+        isFavorite: favoriteSet.has(p.id),
       }));
 
       if (sort === 'most_viewed') {
@@ -250,12 +282,100 @@ export function PropertyListPage() {
     publishedWithin,
     amenitiesParam,
     sort,
+    user,
   ]);
 
   const resultsLabel = useMemo(() => {
     if (loading) return 'Buscando…';
     return `${properties.length} inmueble${properties.length === 1 ? '' : 's'} encontrado${properties.length === 1 ? '' : 's'}`;
   }, [loading, properties.length]);
+
+  const filtersPanelContent = (
+    <div className="flex flex-col gap-5">
+      <Select
+        label="Dormitorios"
+        options={[
+          { value: '', label: 'Cualquiera' },
+          { value: '1', label: '1+' },
+          { value: '2', label: '2+' },
+          { value: '3', label: '3+' },
+          { value: '4', label: '4+' },
+        ]}
+        value={draftBedrooms}
+        onChange={(e) => setDraftBedrooms(e.target.value)}
+      />
+
+      <div>
+        <p className="mb-2 text-sm font-semibold text-ink">Superficie (m²)</p>
+        <div className="grid grid-cols-2 gap-3">
+          <Input placeholder="Desde" type="number" value={draftAreaMin} onChange={(e) => setDraftAreaMin(e.target.value)} />
+          <Input placeholder="Hasta" type="number" value={draftAreaMax} onChange={(e) => setDraftAreaMax(e.target.value)} />
+        </div>
+      </div>
+
+      <Select
+        label="Baños"
+        options={[
+          { value: '', label: 'Cualquiera' },
+          { value: '1', label: '1+' },
+          { value: '2', label: '2+' },
+          { value: '3', label: '3+' },
+        ]}
+        value={draftBathrooms}
+        onChange={(e) => setDraftBathrooms(e.target.value)}
+      />
+
+      <Select
+        label="Estacionamientos"
+        options={[
+          { value: '', label: 'Cualquiera' },
+          { value: '1', label: '1+' },
+          { value: '2', label: '2+' },
+          { value: '3', label: '3+' },
+        ]}
+        value={draftParking}
+        onChange={(e) => setDraftParking(e.target.value)}
+      />
+
+      <Input
+        label="Antigüedad máxima (años)"
+        type="number"
+        value={draftMaxAge}
+        onChange={(e) => setDraftMaxAge(e.target.value)}
+      />
+
+      <Select
+        label="Fecha de publicación"
+        options={publishedWithinOptions}
+        value={draftPublishedWithin}
+        onChange={(e) => setDraftPublishedWithin(e.target.value)}
+      />
+
+      <div>
+        <p className="mb-2 text-sm font-semibold text-ink">Otros ambientes</p>
+        <div className="flex flex-wrap gap-2">
+          {AMENITIES.map((amenity) => (
+            <button
+              type="button"
+              key={amenity}
+              onClick={() =>
+                setDraftAmenities((prev) =>
+                  prev.includes(amenity) ? prev.filter((a) => a !== amenity) : [...prev, amenity]
+                )
+              }
+              className={`rounded-full border px-3 py-1.5 text-sm font-medium transition ${
+                draftAmenities.includes(amenity)
+                  ? 'border-brand bg-brand-soft text-brand'
+                  : 'border-border text-ink-light hover:border-brand/40'
+              }`}
+            >
+              {amenity}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-surface-muted">
@@ -286,9 +406,9 @@ export function PropertyListPage() {
           </div>
         </div>
 
-        {/* Barra de filtros (incluye Ordenar en la misma fila) */}
+        {/* Barra de filtros: operación, ubicaciones, tipo, precio (popover), ordenar, más filtros */}
         <div className="mt-6 flex flex-wrap items-center gap-3 rounded-card border border-border bg-white p-4 shadow-card">
-          <div className="min-w-[150px] flex-1">
+          <div className="w-full sm:w-40">
             <Select
               options={[{ value: 'all', label: 'Comprar o alquilar' }, { value: 'sale', label: 'Comprar' }, { value: 'rent', label: 'Alquilar' }]}
               value={operation}
@@ -296,7 +416,11 @@ export function PropertyListPage() {
             />
           </div>
 
-          <div className="min-w-[160px] flex-1">
+          <div className="w-full sm:min-w-[260px] sm:flex-[2]">
+            <ZoneMultiSelect selected={selectedDistricts} onChange={(v) => setParam('district', v)} />
+          </div>
+
+          <div className="w-full sm:min-w-[160px] sm:flex-1">
             <MultiSelectDropdown
               options={propertyTypeOptions}
               selected={selectedTypes}
@@ -305,30 +429,18 @@ export function PropertyListPage() {
             />
           </div>
 
-          <div className="min-w-[180px] flex-1">
-            <DistrictMultiSelect selected={selectedDistricts} onChange={(v) => setParam('district', v)} />
-          </div>
-
-          <div className="min-w-[150px] flex-1">
-            <PriceInput
-              placeholder="Precio (S/)"
-              forceCurrency="PEN"
-              onValueChange={(value) => setParam('maxPrice', value ? String(value) : '')}
+          <div className="w-full sm:w-44">
+            <PricePopover
+              currency={priceCurrency}
+              minPrice={minPrice}
+              maxPrice={maxPrice}
+              onApply={applyPrice}
+              onClear={clearPrice}
             />
           </div>
 
-          <div className="min-w-[140px] flex-1">
-            <Select
-              options={[
-                { value: '', label: 'Dormitorios' },
-                { value: '1', label: '1+' },
-                { value: '2', label: '2+' },
-                { value: '3', label: '3+' },
-                { value: '4', label: '4+' },
-              ]}
-              value={bedrooms}
-              onChange={(e) => setParam('bedrooms', e.target.value)}
-            />
+          <div className="w-full sm:w-44">
+            <SortDropdown options={sortOptions} value={sort} onChange={(v) => setParam('sort', v)} />
           </div>
 
           <button
@@ -344,10 +456,6 @@ export function PropertyListPage() {
               </span>
             )}
           </button>
-
-          <div className="min-w-[160px] flex-1 sm:ml-auto sm:flex-none sm:w-52">
-            <Select options={sortOptions} value={sort} onChange={(e) => setParam('sort', e.target.value)} />
-          </div>
         </div>
 
         <div className="mt-5">
@@ -383,14 +491,24 @@ export function PropertyListPage() {
           ) : (
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {properties.map((p) => (
-                <PropertyCard key={p.id} property={p} coverImageUrl={p.coverImageUrl} isAgentListed={p.isAgentListed} />
+                <PropertyCard
+                  key={p.id}
+                  property={p}
+                  coverImageUrl={p.coverImageUrl}
+                  isAgentListed={p.isAgentListed}
+                  initialFavorite={p.isFavorite}
+                />
               ))}
             </div>
           )}
         </div>
       </div>
 
-      <Drawer
+      {/* Panel de "Más filtros": fijo desde el borde derecho y superior de
+          la ventana. No tiene fondo oscuro ni bloquea el scroll — puede
+          tapar el borde de algunas tarjetas, pero la página se sigue
+          navegando y scrolleando con normalidad. */}
+      <FilterSidePanel
         open={filtersOpen}
         onClose={() => setFiltersOpen(false)}
         title="Más filtros"
@@ -405,78 +523,8 @@ export function PropertyListPage() {
           </>
         }
       >
-        <div className="flex flex-col gap-5">
-          <div>
-            <p className="mb-2 text-sm font-semibold text-ink">Superficie (m²)</p>
-            <div className="grid grid-cols-2 gap-3">
-              <Input placeholder="Desde" type="number" value={draftAreaMin} onChange={(e) => setDraftAreaMin(e.target.value)} />
-              <Input placeholder="Hasta" type="number" value={draftAreaMax} onChange={(e) => setDraftAreaMax(e.target.value)} />
-            </div>
-          </div>
-
-          <Select
-            label="Baños"
-            options={[
-              { value: '', label: 'Cualquiera' },
-              { value: '1', label: '1+' },
-              { value: '2', label: '2+' },
-              { value: '3', label: '3+' },
-            ]}
-            value={draftBathrooms}
-            onChange={(e) => setDraftBathrooms(e.target.value)}
-          />
-
-          <Select
-            label="Estacionamientos"
-            options={[
-              { value: '', label: 'Cualquiera' },
-              { value: '1', label: '1+' },
-              { value: '2', label: '2+' },
-              { value: '3', label: '3+' },
-            ]}
-            value={draftParking}
-            onChange={(e) => setDraftParking(e.target.value)}
-          />
-
-          <Input
-            label="Antigüedad máxima (años)"
-            type="number"
-            value={draftMaxAge}
-            onChange={(e) => setDraftMaxAge(e.target.value)}
-          />
-
-          <Select
-            label="Fecha de publicación"
-            options={publishedWithinOptions}
-            value={draftPublishedWithin}
-            onChange={(e) => setDraftPublishedWithin(e.target.value)}
-          />
-
-          <div>
-            <p className="mb-2 text-sm font-semibold text-ink">Otros ambientes</p>
-            <div className="flex flex-wrap gap-2">
-              {AMENITIES.map((amenity) => (
-                <button
-                  type="button"
-                  key={amenity}
-                  onClick={() =>
-                    setDraftAmenities((prev) =>
-                      prev.includes(amenity) ? prev.filter((a) => a !== amenity) : [...prev, amenity]
-                    )
-                  }
-                  className={`rounded-full border px-3 py-1.5 text-sm font-medium transition ${
-                    draftAmenities.includes(amenity)
-                      ? 'border-brand bg-brand-soft text-brand'
-                      : 'border-border text-ink-light hover:border-brand/40'
-                  }`}
-                >
-                  {amenity}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </Drawer>
+        {filtersPanelContent}
+      </FilterSidePanel>
     </div>
   );
 }

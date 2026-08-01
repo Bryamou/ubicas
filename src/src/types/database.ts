@@ -1,6 +1,6 @@
 export type UserRole = 'owner' | 'agent' | 'buyer';
 export type OperationType = 'sale' | 'rent';
-export type PropertyType = 'apartment' | 'house' | 'office' | 'land' | 'commercial' | 'other';
+export type PropertyType = 'apartment' | 'house' | 'office' | 'land' | 'commercial' | 'other' | 'project';
 export type PropertyStatus = 'draft' | 'published' | 'paused' | 'closed' | 'sold' | 'rented';
 export type ProposalStatus = 'pending' | 'accepted' | 'rejected';
 export type VisitStatus = 'pending' | 'accepted' | 'rejected' | 'completed';
@@ -16,6 +16,7 @@ export interface Profile {
   agent_description: string | null;
   agent_zones: string[] | null;
   agent_verified: boolean;
+  is_admin: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -34,6 +35,7 @@ export interface Property {
   lng: number | null;
   price: number;
   currency: string;
+  original_price: number | null;
   area_m2: number | null;
   bedrooms: number | null;
   bathrooms: number | null;
@@ -89,6 +91,8 @@ export interface AgentProposal {
   resolved_at: string | null;
 }
 
+export type RequirementUrgency = 'asap' | 'within_30_days' | '1_3_months' | 'more_than_3_months' | 'flexible';
+
 export interface Requirement {
   id: string;
   buyer_id: string;
@@ -102,6 +106,12 @@ export interface Requirement {
   pets: boolean;
   target_date: string | null;
   extra_notes: string | null;
+  min_area_m2: number | null;
+  description: string | null;
+  urgency: RequirementUrgency | null;
+  expiry_date: string | null;
+  lat: number | null;
+  lng: number | null;
   status: RequirementStatus;
   created_at: string;
   updated_at: string;
@@ -121,9 +131,12 @@ export interface RequirementAgentProposal {
 export interface ContactRequest {
   id: string;
   property_id: string;
-  requester_id: string;
+  requester_id: string | null;
   message: string | null;
   status: 'pending' | 'attended';
+  guest_name: string | null;
+  guest_email: string | null;
+  guest_phone: string | null;
   created_at: string;
 }
 
@@ -135,6 +148,23 @@ export interface VisitRequest {
   status: VisitStatus;
   created_at: string;
   updated_at: string;
+}
+
+export interface Conversation {
+  id: string;
+  property_id: string | null;
+  participant_a: string;
+  participant_b: string;
+  created_at: string;
+}
+
+export interface Message {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  body: string;
+  read_at: string | null;
+  created_at: string;
 }
 
 export interface Notification {

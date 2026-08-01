@@ -38,7 +38,7 @@ export function Navbar() {
 
   const links = [
     { label: 'Inmuebles', to: '/inmuebles' },
-    { label: 'Requerimientos', to: '/requerimientos' },
+    { label: 'Clientes', to: '/requerimientos' },
     { label: 'Cómo funciona', to: '/#como-funciona', onClick: handleComoFunciona },
   ];
 
@@ -111,13 +111,16 @@ export function Navbar() {
           )}
         </div>
 
-        <button
-          className="ml-auto md:hidden"
-          onClick={() => setOpen((v) => !v)}
-          aria-label="Abrir menú"
-        >
-          {open ? <X size={24} /> : <Menu size={24} />}
-        </button>
+        <div className="ml-auto flex items-center gap-1 md:hidden">
+          {session && profile && <NotificationBell userId={profile.id} />}
+          <button
+            className="p-1"
+            onClick={() => setOpen((v) => !v)}
+            aria-label="Abrir menú"
+          >
+            {open ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
       </div>
 
       {open && (

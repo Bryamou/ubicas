@@ -18,13 +18,16 @@
 
 do $$
 declare
-  v_owner_id uuid := 'df397fe5-a19b-4417-b0ac-e6b760aee697';
-  v_agent_id uuid := '899fe6d3-50f4-482f-a1c3-c34fd6799c47';
+  v_owner_id uuid := 'OWNER_ID';
+  v_agent_id uuid := 'AGENT_ID';
 
-  -- 3 fotos genéricas reutilizadas para todos los inmuebles de demo
-  img1 text := 'https://picsum.photos/id/1040/1200/800';
-  img2 text := 'https://picsum.photos/id/1074/1200/800';
-  img3 text := 'https://picsum.photos/id/106/1200/800';
+  -- 3 fotos genéricas reutilizadas para todos los inmuebles de demo.
+  -- Se usa el modo "seed" de picsum.photos (genera una imagen distinta
+  -- pero siempre válida a partir de un texto), en vez de /id/N, que solo
+  -- funciona para ciertos números de foto y puede devolver error 404.
+  img1 text := 'https://picsum.photos/seed/ubicas-foto-1/1200/800';
+  img2 text := 'https://picsum.photos/seed/ubicas-foto-2/1200/800';
+  img3 text := 'https://picsum.photos/seed/ubicas-foto-3/1200/800';
 
   p1 uuid := gen_random_uuid();
   p2 uuid := gen_random_uuid();

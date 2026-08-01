@@ -33,7 +33,22 @@ export function OwnerContactsPage() {
   if (loading) return <LoadingState label="Cargando contactos y visitas…" />;
 
   const contactColumns: AdminTableColumn<OwnerContactRow>[] = [
-    { key: 'name', header: 'Interesado', render: (r) => r.requesterName },
+    {
+      key: 'name',
+      header: 'Interesado',
+      render: (r) => (
+        <div>
+          <p className="font-medium text-ink">{r.requesterName}</p>
+          {!r.requester_id && (r.guest_email || r.guest_phone) && (
+            <p className="text-xs text-ink-light">
+              {r.guest_email}
+              {r.guest_email && r.guest_phone && ' · '}
+              {r.guest_phone}
+            </p>
+          )}
+        </div>
+      ),
+    },
     { key: 'property', header: 'Inmueble', render: (r) => r.propertyTitle },
     { key: 'date', header: 'Fecha', render: (r) => new Date(r.created_at).toLocaleDateString('es-PE') },
     { key: 'message', header: 'Mensaje', render: (r) => <span className="line-clamp-2 max-w-xs">{r.message ?? '—'}</span> },
@@ -43,15 +58,17 @@ export function OwnerContactsPage() {
       header: 'Acción',
       render: (r) => (
         <div className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            variant="neutral"
-            icon={<Send size={13} />}
-            loading={opening === r.requester_id + r.property_id}
-            onClick={() => openConversation(r.property_id, r.requester_id)}
-          >
-            Responder
-          </Button>
+          {r.requester_id && (
+            <Button
+              size="sm"
+              variant="neutral"
+              icon={<Send size={13} />}
+              loading={opening === r.requester_id + r.property_id}
+              onClick={() => openConversation(r.property_id, r.requester_id!)}
+            >
+              Responder
+            </Button>
+          )}
           {r.status === 'pending' && (
             <Button size="sm" variant="secondary" onClick={() => markContactAttended(r.id)}>
               Marcar atendido

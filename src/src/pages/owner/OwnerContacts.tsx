@@ -1,27 +1,54 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOwnerContactsAndVisits } from '@/hooks/useOwnerProperties';
+import { getOrCreateConversation } from '@/hooks/useConversations';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/Button';
 import { AdminTable, type AdminTableColumn } from '@/components/ui/AdminTable';
 import type { OwnerContactRow, OwnerVisitRow } from '@/hooks/useOwnerProperties';
-import { MessagesSquare } from 'lucide-react';
+import { MessagesSquare, Send } from 'lucide-react';
 
 type Tab = 'contacts' | 'visits';
 
 export function OwnerContactsPage() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const { contacts, visits, loading, markContactAttended, updateVisitStatus } = useOwnerContactsAndVisits(
     profile?.id
   );
   const [tab, setTab] = useState<Tab>('contacts');
+  const [opening, setOpening] = useState<string | null>(null);
+
+  const openConversation = async (propertyId: string, requesterId: string) => {
+    if (!profile) return;
+    setOpening(requesterId + propertyId);
+    const { id } = await getOrCreateConversation(profile.id, requesterId, propertyId);
+    setOpening(null);
+    if (id) navigate(`/mensajes?conversation=${id}`);
+  };
 
   if (loading) return <LoadingState label="Cargando contactos y visitas…" />;
 
   const contactColumns: AdminTableColumn<OwnerContactRow>[] = [
-    { key: 'name', header: 'Interesado', render: (r) => r.requesterName },
+    {
+      key: 'name',
+      header: 'Interesado',
+      render: (r) => (
+        <div>
+          <p className="font-medium text-ink">{r.requesterName}</p>
+          {!r.requester_id && (r.guest_email || r.guest_phone) && (
+            <p className="text-xs text-ink-light">
+              {r.guest_email}
+              {r.guest_email && r.guest_phone && ' · '}
+              {r.guest_phone}
+            </p>
+          )}
+        </div>
+      ),
+    },
     { key: 'property', header: 'Inmueble', render: (r) => r.propertyTitle },
     { key: 'date', header: 'Fecha', render: (r) => new Date(r.created_at).toLocaleDateString('es-PE') },
     { key: 'message', header: 'Mensaje', render: (r) => <span className="line-clamp-2 max-w-xs">{r.message ?? '—'}</span> },
@@ -29,14 +56,26 @@ export function OwnerContactsPage() {
     {
       key: 'actions',
       header: 'Acción',
-      render: (r) =>
-        r.status === 'pending' ? (
-          <Button size="sm" variant="secondary" onClick={() => markContactAttended(r.id)}>
-            Marcar atendido
-          </Button>
-        ) : (
-          <span className="text-xs text-ink-light">Atendido</span>
-        ),
+      render: (r) => (
+        <div className="flex flex-wrap gap-2">
+          {r.requester_id && (
+            <Button
+              size="sm"
+              variant="neutral"
+              icon={<Send size={13} />}
+              loading={opening === r.requester_id + r.property_id}
+              onClick={() => openConversation(r.property_id, r.requester_id!)}
+            >
+              Responder
+            </Button>
+          )}
+          {r.status === 'pending' && (
+            <Button size="sm" variant="secondary" onClick={() => markContactAttended(r.id)}>
+              Marcar atendido
+            </Button>
+          )}
+        </div>
+      ),
     },
   ];
 
@@ -48,23 +87,34 @@ export function OwnerContactsPage() {
     {
       key: 'actions',
       header: 'Acción',
-      render: (r) =>
-        r.status === 'pending' ? (
-          <div className="flex gap-2">
-            <Button size="sm" variant="primary" onClick={() => updateVisitStatus(r.id, 'accepted')}>
-              Aceptar
-            </Button>
-            <Button size="sm" variant="danger" onClick={() => updateVisitStatus(r.id, 'rejected')}>
-              Rechazar
-            </Button>
-          </div>
-        ) : r.status === 'accepted' ? (
-          <Button size="sm" variant="secondary" onClick={() => updateVisitStatus(r.id, 'completed')}>
-            Marcar completada
+      render: (r) => (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="neutral"
+            icon={<Send size={13} />}
+            loading={opening === r.requester_id + r.property_id}
+            onClick={() => openConversation(r.property_id, r.requester_id)}
+          >
+            Responder
           </Button>
-        ) : (
-          <span className="text-xs text-ink-light">—</span>
-        ),
+          {r.status === 'pending' && (
+            <>
+              <Button size="sm" variant="primary" onClick={() => updateVisitStatus(r.id, 'accepted')}>
+                Aceptar
+              </Button>
+              <Button size="sm" variant="danger" onClick={() => updateVisitStatus(r.id, 'rejected')}>
+                Rechazar
+              </Button>
+            </>
+          )}
+          {r.status === 'accepted' && (
+            <Button size="sm" variant="secondary" onClick={() => updateVisitStatus(r.id, 'completed')}>
+              Marcar completada
+            </Button>
+          )}
+        </div>
+      ),
     },
   ];
 

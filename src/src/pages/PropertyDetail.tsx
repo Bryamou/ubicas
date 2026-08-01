@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Heart, MessageCircle, CalendarCheck, MapPin, ShieldCheck, User } from 'lucide-react';
+import { Heart, MessageCircle, CalendarCheck, MapPin, ShieldCheck, User, Handshake } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getPublicImageUrl } from '@/lib/storage';
+import { getDistrictCoords } from '@/lib/limaDistricts';
+import { PropertyMapView } from '@/components/PropertyMapView';
 import { useAuth } from '@/contexts/AuthContext';
 import { Navbar } from '@/components/Navbar';
 import { Button } from '@/components/ui/Button';
@@ -51,9 +53,13 @@ export function PropertyDetailPage() {
   const [isFavorite, setIsFavorite] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
   const [visitOpen, setVisitOpen] = useState(false);
+  const [proposalOpen, setProposalOpen] = useState(false);
   const [contactMessage, setContactMessage] = useState('');
   const [visitDate, setVisitDate] = useState('');
+  const [proposalPitch, setProposalPitch] = useState('');
+  const [proposalCommission, setProposalCommission] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [proposalError, setProposalError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -153,6 +159,39 @@ export function PropertyDetailPage() {
       setVisitOpen(false);
       setVisitDate('');
     }
+  };
+
+  const submitProposal = async () => {
+    if (!user || !property) return;
+    if (!proposalPitch.trim() || !proposalCommission || Number(proposalCommission) <= 0) {
+      setProposalError('Completa tu presentación y una comisión válida.');
+      return;
+    }
+    setSaving(true);
+    setProposalError(null);
+
+    const { error } = await supabase.from('agent_proposals').insert({
+      property_id: property.id,
+      agent_id: user.id,
+      owner_id: property.owner_id,
+      pitch: proposalPitch.trim(),
+      commission_percent: property.operation === 'sale' ? Number(proposalCommission) : null,
+      commission_amount: property.operation === 'rent' ? Number(proposalCommission) : null,
+    });
+
+    setSaving(false);
+    if (error) {
+      setProposalError(
+        error.message.includes('duplicate') || error.message.includes('unique')
+          ? 'Ya tienes una propuesta pendiente para este inmueble.'
+          : error.message
+      );
+      return;
+    }
+    setFeedback('Tu propuesta fue enviada al propietario. Podrás ver su respuesta en "Mis propuestas".');
+    setProposalOpen(false);
+    setProposalPitch('');
+    setProposalCommission('');
   };
 
   if (loading) {
@@ -269,19 +308,23 @@ export function PropertyDetailPage() {
               </div>
             )}
 
-            {property.lat && property.lng ? (
-              <div className="aspect-video w-full overflow-hidden rounded-card border border-border">
-                <iframe
-                  title="Mapa"
-                  className="h-full w-full"
-                  src={`https://www.google.com/maps?q=${property.lat},${property.lng}&z=15&output=embed`}
-                />
-              </div>
-            ) : (
-              <div className="flex aspect-video w-full items-center justify-center rounded-card border border-dashed border-border text-sm text-ink-light">
-                Ubicación aproximada: {property.district}
-              </div>
-            )}
+            <PropertyMapView
+              height="320px"
+              properties={[
+                {
+                  id: property.id,
+                  title: property.title,
+                  price: property.price,
+                  currency: property.currency,
+                  operation: property.operation,
+                  district: property.district,
+                  coverImageUrl: images[0] ?? null,
+                  ...(property.lat != null && property.lng != null
+                    ? { lat: property.lat, lng: property.lng }
+                    : getDistrictCoords(property.district)),
+                },
+              ]}
+            />
           </div>
 
           <aside className="h-fit rounded-card border border-border bg-white p-5 shadow-card">
@@ -314,6 +357,11 @@ export function PropertyDetailPage() {
                   >
                     {isFavorite ? 'En tus favoritos' : 'Guardar en favoritos'}
                   </Button>
+                  {profile?.role === 'agent' && property.owner_id !== user.id && (
+                    <Button variant="secondary" icon={<Handshake size={16} />} fullWidth onClick={() => setProposalOpen(true)}>
+                      Proponerme para representarlo
+                    </Button>
+                  )}
                   {!isBuyer && <p className="text-xs text-ink-light">Cualquier rol puede contactar y guardar favoritos.</p>}
                 </>
               ) : (
@@ -377,6 +425,38 @@ export function PropertyDetailPage() {
           value={visitDate}
           onChange={(e) => setVisitDate(e.target.value)}
         />
+      </Modal>
+
+      <Modal
+        open={proposalOpen}
+        onClose={() => setProposalOpen(false)}
+        title="Proponerme para representar este inmueble"
+        footer={
+          <Button variant="primary" onClick={submitProposal} loading={saving}>
+            Enviar propuesta
+          </Button>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          {proposalError && <Alert type="error">{proposalError}</Alert>}
+          <Textarea
+            label="Presentación / gancho comercial"
+            placeholder="Hola, tengo cartera de compradores activos en esta zona…"
+            value={proposalPitch}
+            onChange={(e) => setProposalPitch(e.target.value)}
+          />
+          <Input
+            label={property.operation === 'sale' ? 'Comisión (%)' : 'Comisión (monto en S/)'}
+            type="number"
+            value={proposalCommission}
+            onChange={(e) => setProposalCommission(e.target.value)}
+            hint={
+              property.operation === 'sale'
+                ? 'Para ventas, la comisión se expresa en porcentaje.'
+                : 'Para alquileres, la comisión se expresa como monto fijo.'
+            }
+          />
+        </div>
       </Modal>
     </div>
   );

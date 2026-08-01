@@ -82,7 +82,7 @@ export function MultiSelectDropdown({
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1 max-h-72 w-64 overflow-y-auto rounded-input border border-border bg-white p-2 shadow-soft">
+        <div className="absolute z-50 mt-1 max-h-72 w-64 max-w-[90vw] overflow-y-auto rounded-input border border-border bg-white p-2 shadow-soft">
           <button
             type="button"
             onClick={toggleAll}

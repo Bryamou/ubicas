@@ -166,7 +166,7 @@ export function useOwnerContactsAndVisits(ownerId: string | undefined) {
       (contactRows ?? []).map((c: any) => ({
         ...c,
         propertyTitle: titleMap.get(c.property_id) ?? '',
-        requesterName: c.requester?.full_name ?? 'Usuario',
+        requesterName: c.requester?.full_name ?? c.guest_name ?? 'Usuario',
       }))
     );
     setVisits(

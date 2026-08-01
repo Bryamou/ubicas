@@ -8,11 +8,14 @@ interface DrawerProps {
   title: string;
   children: ReactNode;
   footer?: ReactNode;
+  /** Clases extra en el contenedor raíz (ej. "lg:hidden" para que solo se
+   * use como panel superpuesto en pantallas chicas). */
+  className?: string;
 }
 
 /** Panel lateral que entra desde la derecha, para filtros avanzados u otras
  * configuraciones extensas que no ameritan un modal centrado. */
-export function Drawer({ open, onClose, title, children, footer }: DrawerProps) {
+export function Drawer({ open, onClose, title, children, footer, className }: DrawerProps) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -32,7 +35,7 @@ export function Drawer({ open, onClose, title, children, footer }: DrawerProps) 
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex justify-end">
+    <div className={`fixed inset-0 z-50 flex justify-end ${className ?? ''}`}>
       <div
         className={`absolute inset-0 bg-ink/50 transition-opacity duration-200 ${visible ? 'opacity-100' : 'opacity-0'}`}
         onClick={onClose}

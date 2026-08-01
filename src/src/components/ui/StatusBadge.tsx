@@ -63,7 +63,7 @@ export function StatusBadge({
   return (
     <span
       className={clsx(
-        'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold',
+        'inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.03em]',
         toneClasses[resolvedTone]
       )}
     >

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface PriceInputProps {
   onValueChange: (amount: number | null, currency: 'PEN' | 'USD') => void;
@@ -8,6 +8,9 @@ interface PriceInputProps {
    * esta moneda fija (ej. el buscador simplificado del Home, que solo
    * acepta montos en soles). */
   forceCurrency?: 'PEN' | 'USD';
+  /** Valor inicial (ej. al editar un borrador ya guardado). */
+  value?: string;
+  initialCurrency?: 'PEN' | 'USD';
 }
 
 function detectCurrencyAndDigits(raw: string): { currency: 'PEN' | 'USD'; digits: string } {
@@ -27,8 +30,13 @@ function formatDisplay(digits: string, currency: 'PEN' | 'USD') {
 /** Input monetario: detecta automáticamente la moneda por el prefijo que
  * escriba el usuario ($ / USD / US$ => dólares, cualquier otro caso =>
  * soles) y formatea con separador de miles mientras escribe. */
-export function PriceInput({ onValueChange, placeholder, className, forceCurrency }: PriceInputProps) {
-  const [display, setDisplay] = useState('');
+export function PriceInput({ onValueChange, placeholder, className, forceCurrency, value, initialCurrency }: PriceInputProps) {
+  const [display, setDisplay] = useState(value ? formatDisplay(value, initialCurrency ?? forceCurrency ?? 'PEN') : '');
+
+  useEffect(() => {
+    setDisplay(value ? formatDisplay(value, initialCurrency ?? forceCurrency ?? 'PEN') : '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
 
   const handleChange = (raw: string) => {
     if (!raw.trim()) {

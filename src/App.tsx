@@ -21,6 +21,7 @@ import { AgentPropertiesPage } from '@/pages/agent/AgentProperties';
 import { AgentProposalsPage } from '@/pages/agent/AgentProposals';
 import { AgentProfilePage } from '@/pages/agent/AgentProfile';
 import { RequirementsListPage } from '@/pages/RequirementsList';
+import { RequirementDetailPage } from '@/pages/RequirementDetail';
 import { BuyerPanelLayout } from '@/layouts/BuyerPanelLayout';
 import { BuyerFavoritesPage } from '@/pages/buyer/BuyerFavorites';
 import { BuyerContactsPage } from '@/pages/buyer/BuyerContacts';
@@ -44,6 +45,7 @@ export function App() {
           <Route path="/inmuebles" element={<PropertyListPage />} />
           <Route path="/inmuebles/:id" element={<PropertyDetailPage />} />
           <Route path="/requerimientos" element={<RequirementsListPage />} />
+          <Route path="/requerimientos/:id" element={<RequirementDetailPage />} />
 
           {/* Protegidas por sesión (cualquier rol) */}
           <Route element={<ProtectedRoute />}>

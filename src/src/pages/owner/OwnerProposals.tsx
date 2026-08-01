@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { ShieldCheck, User } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ShieldCheck, User, Send } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOwnerProposals } from '@/hooks/useOwnerProperties';
+import { getOrCreateConversation } from '@/hooks/useConversations';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -12,10 +14,20 @@ import { Handshake } from 'lucide-react';
 
 export function OwnerProposalsPage() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const { proposals, loading, accept, reject } = useOwnerProposals(profile?.id);
   const [confirming, setConfirming] = useState<{ id: string; action: 'accept' | 'reject' } | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [opening, setOpening] = useState<string | null>(null);
+
+  const messageAgent = async (agentId: string) => {
+    if (!profile) return;
+    setOpening(agentId);
+    const { id } = await getOrCreateConversation(profile.id, agentId, null);
+    setOpening(null);
+    if (id) navigate(`/mensajes?conversation=${id}`);
+  };
 
   if (loading) return <LoadingState label="Cargando propuestas…" />;
 
@@ -76,6 +88,19 @@ export function OwnerProposalsPage() {
               </Button>
               <Button variant="danger" size="sm" onClick={() => setConfirming({ id: p.id, action: 'reject' })}>
                 Rechazar
+              </Button>
+            </div>
+          )}
+          {p.status === 'accepted' && (
+            <div className="mt-4">
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<Send size={14} />}
+                loading={opening === p.agent_id}
+                onClick={() => messageAgent(p.agent_id)}
+              >
+                Escribirle al agente
               </Button>
             </div>
           )}
