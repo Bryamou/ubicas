@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Heart, MessageCircle, CalendarCheck, MapPin, ShieldCheck, User, Handshake } from 'lucide-react';
+import { Heart, MessageCircle, CalendarCheck, MapPin, ShieldCheck, User } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getPublicImageUrl } from '@/lib/storage';
 import { getDistrictCoords } from '@/lib/limaDistricts';
 import { PropertyMapView } from '@/components/PropertyMapView';
+import { ContactRequestModal } from '@/components/ContactRequestModal';
+import { getContactedPropertyIds } from '@/lib/guestContact';
 import { useAuth } from '@/contexts/AuthContext';
 import { Navbar } from '@/components/Navbar';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { Textarea } from '@/components/ui/Textarea';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -52,14 +53,10 @@ export function PropertyDetailPage() {
 
   const [isFavorite, setIsFavorite] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
+  const [contacted, setContacted] = useState(false);
   const [visitOpen, setVisitOpen] = useState(false);
-  const [proposalOpen, setProposalOpen] = useState(false);
-  const [contactMessage, setContactMessage] = useState('');
   const [visitDate, setVisitDate] = useState('');
-  const [proposalPitch, setProposalPitch] = useState('');
-  const [proposalCommission, setProposalCommission] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [proposalError, setProposalError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -112,6 +109,16 @@ export function PropertyDetailPage() {
           .eq('user_id', user.id)
           .maybeSingle();
         setIsFavorite(!!fav);
+
+        const { data: existingContact } = await supabase
+          .from('contact_requests')
+          .select('id')
+          .eq('property_id', id)
+          .eq('requester_id', user.id)
+          .maybeSingle();
+        setContacted(!!existingContact);
+      } else {
+        setContacted(getContactedPropertyIds().has(id));
       }
 
       setLoading(false);
@@ -129,22 +136,6 @@ export function PropertyDetailPage() {
     setIsFavorite(!isFavorite);
   };
 
-  const submitContact = async () => {
-    if (!user || !property) return;
-    setSaving(true);
-    const { error } = await supabase.from('contact_requests').insert({
-      property_id: property.id,
-      requester_id: user.id,
-      message: contactMessage.trim() || null,
-    });
-    setSaving(false);
-    if (!error) {
-      setFeedback('Tu mensaje fue enviado. El contacto principal lo recibirá en su bandeja.');
-      setContactOpen(false);
-      setContactMessage('');
-    }
-  };
-
   const submitVisit = async () => {
     if (!user || !property || !visitDate) return;
     setSaving(true);
@@ -159,39 +150,6 @@ export function PropertyDetailPage() {
       setVisitOpen(false);
       setVisitDate('');
     }
-  };
-
-  const submitProposal = async () => {
-    if (!user || !property) return;
-    if (!proposalPitch.trim() || !proposalCommission || Number(proposalCommission) <= 0) {
-      setProposalError('Completa tu presentación y una comisión válida.');
-      return;
-    }
-    setSaving(true);
-    setProposalError(null);
-
-    const { error } = await supabase.from('agent_proposals').insert({
-      property_id: property.id,
-      agent_id: user.id,
-      owner_id: property.owner_id,
-      pitch: proposalPitch.trim(),
-      commission_percent: property.operation === 'sale' ? Number(proposalCommission) : null,
-      commission_amount: property.operation === 'rent' ? Number(proposalCommission) : null,
-    });
-
-    setSaving(false);
-    if (error) {
-      setProposalError(
-        error.message.includes('duplicate') || error.message.includes('unique')
-          ? 'Ya tienes una propuesta pendiente para este inmueble.'
-          : error.message
-      );
-      return;
-    }
-    setFeedback('Tu propuesta fue enviada al propietario. Podrás ver su respuesta en "Mis propuestas".');
-    setProposalOpen(false);
-    setProposalPitch('');
-    setProposalCommission('');
   };
 
   if (loading) {
@@ -343,8 +301,13 @@ export function PropertyDetailPage() {
             <div className="mt-4 flex flex-col gap-2">
               {user ? (
                 <>
-                  <Button variant="primary" icon={<MessageCircle size={16} />} fullWidth onClick={() => setContactOpen(true)}>
-                    Contactar
+                  <Button
+                    variant={contacted ? 'secondary' : 'primary'}
+                    icon={<MessageCircle size={16} />}
+                    fullWidth
+                    onClick={() => setContactOpen(true)}
+                  >
+                    {contacted ? 'Ver contacto' : 'Contactar'}
                   </Button>
                   <Button variant="secondary" icon={<CalendarCheck size={16} />} fullWidth onClick={() => setVisitOpen(true)}>
                     Solicitar visita
@@ -357,25 +320,24 @@ export function PropertyDetailPage() {
                   >
                     {isFavorite ? 'En tus favoritos' : 'Guardar en favoritos'}
                   </Button>
-                  {profile?.role === 'agent' && property.owner_id !== user.id && (
-                    <Button variant="secondary" icon={<Handshake size={16} />} fullWidth onClick={() => setProposalOpen(true)}>
-                      Proponerme para representarlo
-                    </Button>
-                  )}
                   {!isBuyer && <p className="text-xs text-ink-light">Cualquier rol puede contactar y guardar favoritos.</p>}
                 </>
               ) : (
                 <>
-                  <Link to="/login">
-                    <Button variant="primary" fullWidth>
-                      Inicia sesión para contactar
-                    </Button>
-                  </Link>
+                  <Button
+                    variant={contacted ? 'secondary' : 'primary'}
+                    icon={<MessageCircle size={16} />}
+                    fullWidth
+                    onClick={() => setContactOpen(true)}
+                  >
+                    {contacted ? 'Ver contacto' : 'Contactar'}
+                  </Button>
                   <p className="text-center text-xs text-ink-light">
-                    ¿Aún no tienes cuenta?{' '}
-                    <Link to="/register" className="font-semibold text-brand hover:underline">
-                      Regístrate gratis
-                    </Link>
+                    ¿Ya tienes cuenta?{' '}
+                    <Link to="/login" className="font-semibold text-brand hover:underline">
+                      Inicia sesión
+                    </Link>{' '}
+                    para guardar favoritos y solicitar visitas.
                   </p>
                 </>
               )}
@@ -391,23 +353,13 @@ export function PropertyDetailPage() {
         </div>
       </div>
 
-      <Modal
+      <ContactRequestModal
         open={contactOpen}
         onClose={() => setContactOpen(false)}
-        title="Contactar"
-        footer={
-          <Button variant="primary" onClick={submitContact} loading={saving}>
-            Enviar mensaje
-          </Button>
-        }
-      >
-        <Textarea
-          label="Mensaje (opcional)"
-          placeholder="Hola, me interesa este inmueble…"
-          value={contactMessage}
-          onChange={(e) => setContactMessage(e.target.value)}
-        />
-      </Modal>
+        property={property}
+        alreadyContacted={contacted}
+        onContacted={() => setContacted(true)}
+      />
 
       <Modal
         open={visitOpen}
@@ -425,38 +377,6 @@ export function PropertyDetailPage() {
           value={visitDate}
           onChange={(e) => setVisitDate(e.target.value)}
         />
-      </Modal>
-
-      <Modal
-        open={proposalOpen}
-        onClose={() => setProposalOpen(false)}
-        title="Proponerme para representar este inmueble"
-        footer={
-          <Button variant="primary" onClick={submitProposal} loading={saving}>
-            Enviar propuesta
-          </Button>
-        }
-      >
-        <div className="flex flex-col gap-4">
-          {proposalError && <Alert type="error">{proposalError}</Alert>}
-          <Textarea
-            label="Presentación / gancho comercial"
-            placeholder="Hola, tengo cartera de compradores activos en esta zona…"
-            value={proposalPitch}
-            onChange={(e) => setProposalPitch(e.target.value)}
-          />
-          <Input
-            label={property.operation === 'sale' ? 'Comisión (%)' : 'Comisión (monto en S/)'}
-            type="number"
-            value={proposalCommission}
-            onChange={(e) => setProposalCommission(e.target.value)}
-            hint={
-              property.operation === 'sale'
-                ? 'Para ventas, la comisión se expresa en porcentaje.'
-                : 'Para alquileres, la comisión se expresa como monto fijo.'
-            }
-          />
-        </div>
       </Modal>
     </div>
   );

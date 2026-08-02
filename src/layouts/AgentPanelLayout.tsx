@@ -1,5 +1,5 @@
 import { Outlet, Link } from 'react-router-dom';
-import { LayoutGrid, Building2, Handshake, UserCircle, Search } from 'lucide-react';
+import { LayoutGrid, Building2, Heart, Handshake, UserCircle, Search } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
 import { PanelSidebar, type SidebarItem } from '@/components/PanelSidebar';
 import { Button } from '@/components/ui/Button';
@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 const items: SidebarItem[] = [
   { to: '/panel/agente', label: 'Resumen', icon: LayoutGrid, end: true },
   { to: '/panel/agente/inmuebles', label: 'Inmuebles vinculados', icon: Building2 },
+  { to: '/panel/agente/favoritos', label: 'Favoritos', icon: Heart },
   { to: '/panel/agente/propuestas', label: 'Mis propuestas', icon: Handshake },
   { to: '/panel/agente/perfil', label: 'Mi perfil', icon: UserCircle },
 ];

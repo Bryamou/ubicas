@@ -27,7 +27,7 @@ export function LandingPage() {
   const [mode, setMode] = useState<SearchMode>('property');
 
   // Buscador del Hero: solo operación + zona
-  const [operation, setOperation] = useState('sale');
+  const [operation, setOperation] = useState('all');
   const [districts, setDistricts] = useState<string[]>([]);
 
   const [featured, setFeatured] = useState<FeaturedProperty[]>([]);
@@ -86,7 +86,7 @@ export function LandingPage() {
   const handleSearch = (e: FormEvent) => {
     e.preventDefault();
     const params = new URLSearchParams();
-    params.set('operation', operation);
+    if (operation !== 'all') params.set('operation', operation);
     if (districts.length > 0) params.set('district', districts.join(','));
 
     if (mode === 'property') {
@@ -145,11 +145,13 @@ export function LandingPage() {
             <select value={operation} onChange={(e) => setOperation(e.target.value)} className={selectClass}>
               {mode === 'property' ? (
                 <>
+                  <option value="all">Todos</option>
                   <option value="sale">Comprar</option>
                   <option value="rent">Alquilar</option>
                 </>
               ) : (
                 <>
+                  <option value="all">Todos</option>
                   <option value="sale">Comprador</option>
                   <option value="rent">Inquilino</option>
                 </>

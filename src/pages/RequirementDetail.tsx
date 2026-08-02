@@ -3,13 +3,11 @@ import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { MapPin, BedDouble, Bath, Ruler, Car, Calendar, MessageCircle, PawPrint, Heart, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { getOrCreateConversation } from '@/hooks/useConversations';
+import { RequirementContactModal } from '@/components/RequirementContactModal';
 import { getDistrictCoords } from '@/lib/limaDistricts';
 import { Navbar } from '@/components/Navbar';
 import { PropertyMapView } from '@/components/PropertyMapView';
-import { RequirementIllustration } from '@/components/RequirementIllustration';
 import { LoadingState } from '@/components/ui/LoadingState';
-import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/Button';
 import {
   requirementTypeLabels,
@@ -17,7 +15,8 @@ import {
   publishedLabel,
   expectedDatePhrase,
   urgencyLabel,
-  getRequirementBadge,
+  getOpportunityBadge,
+  getCompletenessScore,
 } from '@/lib/requirementHelpers';
 import type { Requirement } from '@/types/database';
 
@@ -29,8 +28,10 @@ export function RequirementDetailPage() {
 
   const [requirement, setRequirement] = useState<Requirement | null>(null);
   const [loading, setLoading] = useState(true);
-  const [contacting, setContacting] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contacted, setContacted] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [favoriteError, setFavoriteError] = useState<string | null>(null);
   const [savingFavorite, setSavingFavorite] = useState(false);
 
   useEffect(() => {
@@ -48,6 +49,14 @@ export function RequirementDetailPage() {
           .eq('user_id', user.id)
           .maybeSingle();
         setIsFavorite(!!fav);
+
+        const { data: existingContact } = await supabase
+          .from('requirement_contacts')
+          .select('id')
+          .eq('requirement_id', id)
+          .eq('contacter_id', user.id)
+          .maybeSingle();
+        setContacted(!!existingContact);
       }
       setLoading(false);
     })();
@@ -60,26 +69,29 @@ export function RequirementDetailPage() {
       return;
     }
     setSavingFavorite(true);
+    setFavoriteError(null);
     if (isFavorite) {
       await supabase.from('favorites').delete().eq('requirement_id', requirement.id).eq('user_id', user.id);
+      setIsFavorite(false);
     } else {
-      await supabase.from('favorites').insert({ requirement_id: requirement.id, user_id: user.id });
+      const { error } = await supabase.from('favorites').insert({ requirement_id: requirement.id, user_id: user.id });
+      if (error) {
+        setFavoriteError(error.message);
+      } else {
+        setIsFavorite(true);
+      }
     }
-    setIsFavorite(!isFavorite);
     setSavingFavorite(false);
   };
 
-  const handleContact = async () => {
+  const handleContactClick = () => {
     if (!requirement) return;
     if (!user) {
       navigate('/login', { state: { from: location.pathname } });
       return;
     }
     if (requirement.buyer_id === user.id) return;
-    setContacting(true);
-    const { id: conversationId } = await getOrCreateConversation(user.id, requirement.buyer_id, null);
-    setContacting(false);
-    if (conversationId) navigate(`/mensajes?conversation=${conversationId}`);
+    setContactOpen(true);
   };
 
   if (loading) {
@@ -101,7 +113,8 @@ export function RequirementDetailPage() {
   }
 
   const r = requirement;
-  const badge = getRequirementBadge(r);
+  const badge = getOpportunityBadge(r.urgency);
+  const completeness = getCompletenessScore(r);
   const coords = r.lat != null && r.lng != null ? { lat: r.lat, lng: r.lng } : getDistrictCoords(r.district);
   const typeLabel = requirementTypeLabels[r.property_type] ?? r.property_type;
 
@@ -109,13 +122,6 @@ export function RequirementDetailPage() {
     <div className="min-h-screen bg-surface-muted">
       <Navbar />
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* "Galería": ilustración, misma estructura que la ficha de inmueble */}
-        <div className="overflow-hidden rounded-card border border-border bg-white">
-          <div className="aspect-video w-full">
-            <RequirementIllustration />
-          </div>
-        </div>
-
         <div className="mt-6 grid gap-6 lg:grid-cols-3">
           <div className="flex flex-col gap-6 lg:col-span-2">
             <div>
@@ -126,7 +132,11 @@ export function RequirementDetailPage() {
                 <span className="flex items-center gap-1 rounded-full bg-brand-soft px-2.5 py-1 text-xs font-semibold text-brand">
                   <Users size={12} /> Cliente
                 </span>
-                {badge && <StatusBadge label={badge.label} tone={badge.tone} />}
+                <span className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-wide ${
+                  badge.tone === 'danger' ? 'bg-red-50 text-red-700' : badge.tone === 'warning' ? 'bg-warning-soft text-warning' : 'bg-success-soft text-success'
+                }`}>
+                  {badge.emoji} {badge.label}
+                </span>
               </div>
               <h1 className="mt-2 flex items-center gap-2 text-2xl font-extrabold text-ink">
                 <MapPin size={20} className="text-brand" /> {r.district}
@@ -155,6 +165,19 @@ export function RequirementDetailPage() {
               <div>
                 <p className="text-sm font-semibold text-ink">{expectedDatePhrase(r.urgency)}</p>
                 <p className="text-xs text-ink-light">Urgencia: {urgencyLabel(r.urgency)}</p>
+              </div>
+            </div>
+
+            {/* Completitud del requerimiento */}
+            <div>
+              <div className="mb-1 flex items-center justify-between text-xs font-medium text-ink-light">
+                <span>Requerimiento {completeness === 100 ? 'completo' : `${completeness}% completo`}</span>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
+                <div
+                  className={`h-full rounded-full transition-all ${completeness === 100 ? 'bg-success' : 'bg-brand'}`}
+                  style={{ width: `${completeness}%` }}
+                />
               </div>
             </div>
 
@@ -206,8 +229,13 @@ export function RequirementDetailPage() {
             </div>
 
             <div className="mt-4 flex flex-col gap-2">
-              <Button variant="primary" icon={<MessageCircle size={16} />} fullWidth loading={contacting} onClick={handleContact}>
-                Contactar cliente
+              <Button
+                variant={contacted ? 'secondary' : 'primary'}
+                icon={<MessageCircle size={16} />}
+                fullWidth
+                onClick={handleContactClick}
+              >
+                {contacted ? 'Ya contactado' : 'Contactar cliente'}
               </Button>
               <Button
                 variant={isFavorite ? 'primary' : 'neutral'}
@@ -218,6 +246,7 @@ export function RequirementDetailPage() {
               >
                 {isFavorite ? 'En tus favoritos' : 'Guardar en favoritos'}
               </Button>
+              {favoriteError && <p className="text-center text-xs font-medium text-red-600">{favoriteError}</p>}
               {!user && (
                 <p className="text-center text-xs text-ink-light">
                   <Link to="/login" className="font-semibold text-brand hover:underline">
@@ -230,6 +259,16 @@ export function RequirementDetailPage() {
           </aside>
         </div>
       </div>
+
+      {user && user.id !== r.buyer_id && (
+        <RequirementContactModal
+          open={contactOpen}
+          onClose={() => setContactOpen(false)}
+          requirementId={r.id}
+          alreadyContacted={contacted}
+          onContacted={() => setContacted(true)}
+        />
+      )}
     </div>
   );
 }

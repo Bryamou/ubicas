@@ -20,6 +20,7 @@ import type { Requirement } from '@/types/database';
 
 interface RequirementWithFavorite extends Requirement {
   isFavorite?: boolean;
+  isContacted?: boolean;
 }
 
 const propertyTypeOptions = Object.entries(requirementTypeLabels)
@@ -202,13 +203,14 @@ export function RequirementsListPage() {
 
       let withFavorites: RequirementWithFavorite[] = list;
       if (user && list.length > 0) {
-        const { data: favs } = await supabase
-          .from('favorites')
-          .select('requirement_id')
-          .eq('user_id', user.id)
-          .in('requirement_id', list.map((r) => r.id));
+        const ids = list.map((r) => r.id);
+        const [{ data: favs }, { data: contacts }] = await Promise.all([
+          supabase.from('favorites').select('requirement_id').eq('user_id', user.id).in('requirement_id', ids),
+          supabase.from('requirement_contacts').select('requirement_id').eq('contacter_id', user.id).in('requirement_id', ids),
+        ]);
         const favSet = new Set((favs ?? []).map((f: any) => f.requirement_id));
-        withFavorites = list.map((r) => ({ ...r, isFavorite: favSet.has(r.id) }));
+        const contactedSet = new Set((contacts ?? []).map((c: any) => c.requirement_id));
+        withFavorites = list.map((r) => ({ ...r, isFavorite: favSet.has(r.id), isContacted: contactedSet.has(r.id) }));
       }
 
       setRequirements(withFavorites);
@@ -434,7 +436,7 @@ export function RequirementsListPage() {
           ) : (
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {requirements.map((r) => (
-                <RequirementCard key={r.id} requirement={r} initialFavorite={r.isFavorite} />
+                <RequirementCard key={r.id} requirement={r} initialFavorite={r.isFavorite} initialContacted={r.isContacted} />
               ))}
             </div>
           )}

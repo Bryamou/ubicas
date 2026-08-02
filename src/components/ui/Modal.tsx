@@ -26,10 +26,10 @@ export function Modal({ open, onClose, title, children, footer }: ModalProps) {
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-ink/50" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-lg rounded-card bg-white p-6 shadow-soft">
+      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-lg rounded-card bg-white p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-ink">{title}</h2>
+          <h2 className="text-xl font-bold text-ink">{title}</h2>
           <button
             onClick={onClose}
             className="rounded-full p-1 text-ink-light hover:bg-surface-muted"

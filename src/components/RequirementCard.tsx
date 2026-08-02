@@ -1,27 +1,39 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { BedDouble, Bath, Ruler, Users, Heart, Calendar } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { MapPin, BedDouble, Bath, Ruler, Car, Calendar, Heart, MessageCircle, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { RequirementIllustration } from '@/components/RequirementIllustration';
+import { RequirementContactModal } from '@/components/RequirementContactModal';
 import type { Requirement } from '@/types/database';
-import { requirementTypeLabels, formatBudget, expectedDatePhrase } from '@/lib/requirementHelpers';
+import { requirementTypeLabels, formatBudget, expectedDatePhrase, getOpportunityBadge } from '@/lib/requirementHelpers';
 
 interface RequirementCardProps {
   requirement: Requirement;
   initialFavorite?: boolean;
+  initialContacted?: boolean;
 }
 
-/** Tarjeta de "cliente" (requerimiento): misma estructura y clases que
- * PropertyCard, con el contenido adaptado — sin foto (ilustración),
- * "Compra/Alquiler" + etiqueta "Cliente" en vez de "Venta" + "Propietario",
- * presupuesto máximo en vez de precio, y el botón principal lleva al
- * detalle en vez de abrir un formulario de contacto. */
-export function RequirementCard({ requirement: r, initialFavorite }: RequirementCardProps) {
+const toneClasses: Record<string, string> = {
+  danger: 'bg-red-50 text-red-700',
+  warning: 'bg-warning-soft text-warning',
+  success: 'bg-success-soft text-success',
+};
+
+/**
+ * Tarjeta de "cliente" (requerimiento): toda la tarjeta lleva al detalle;
+ * el botón "Contactar" y el corazón de favoritos son la única excepción
+ * (usan stopPropagation para no disparar la navegación). Resumen
+ * ejecutivo sin fotos, con el presupuesto como elemento dominante.
+ */
+export function RequirementCard({ requirement: r, initialFavorite, initialContacted }: RequirementCardProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [isFavorite, setIsFavorite] = useState(!!initialFavorite);
   const [savingFavorite, setSavingFavorite] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contacted, setContacted] = useState(!!initialContacted);
+
+  const goToDetail = () => navigate(`/requerimientos/${r.id}`);
 
   const toggleFavorite = async () => {
     if (!user) {
@@ -32,10 +44,24 @@ export function RequirementCard({ requirement: r, initialFavorite }: Requirement
     if (isFavorite) {
       await supabase.from('favorites').delete().eq('requirement_id', r.id).eq('user_id', user.id);
     } else {
-      await supabase.from('favorites').insert({ requirement_id: r.id, user_id: user.id });
+      const { error } = await supabase.from('favorites').insert({ requirement_id: r.id, user_id: user.id });
+      if (error) {
+        alert(error.message);
+        setSavingFavorite(false);
+        return;
+      }
     }
     setIsFavorite(!isFavorite);
     setSavingFavorite(false);
+  };
+
+  const handleContactClick = () => {
+    if (!user) {
+      navigate('/login', { state: { from: `/requerimientos/${r.id}` } });
+      return;
+    }
+    if (user.id === r.buyer_id) return; // no contactarse a uno mismo
+    setContactOpen(true);
   };
 
   const typeLabel = requirementTypeLabels[r.property_type] ?? r.property_type;
@@ -43,60 +69,87 @@ export function RequirementCard({ requirement: r, initialFavorite }: Requirement
     r.operation === 'sale'
       ? `Busco ${typeLabel.toLowerCase()} en ${r.district}`
       : `Busco ${typeLabel.toLowerCase()} para alquiler en ${r.district}`;
+  const badge = getOpportunityBadge(r.urgency);
 
   return (
-    <div className="group flex flex-col overflow-hidden rounded-card border border-border bg-white shadow-card transition hover:shadow-soft">
-      <Link to={`/requerimientos/${r.id}`}>
-        <div className="relative aspect-[4/3] w-full overflow-hidden bg-surface-muted">
-          <RequirementIllustration />
-          <span className="absolute left-3 top-3 rounded-full bg-white/95 px-2.5 py-1 text-xs font-semibold text-ink shadow-card">
-            {r.operation === 'sale' ? 'Compra' : 'Alquiler'}
+    <div
+      role="link"
+      tabIndex={0}
+      onClick={goToDetail}
+      onKeyDown={(e) => e.key === 'Enter' && goToDetail()}
+      className="flex cursor-pointer flex-col gap-3 rounded-card border border-border bg-white p-5 shadow-card transition hover:shadow-soft"
+    >
+      {/* Nivel 1: operación + indicador de oportunidad */}
+      <div className="flex items-start justify-between gap-2">
+        <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-semibold text-ink">
+          {r.operation === 'sale' ? 'Compra' : 'Alquiler'}
+        </span>
+        <span className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-wide ${toneClasses[badge.tone]}`}>
+          {badge.emoji} {badge.label}
+        </span>
+      </div>
+
+      {/* Nivel 2: título */}
+      <h3 className="line-clamp-2 text-base font-bold text-ink">{title}</h3>
+      <p className="flex items-center gap-1 text-xs text-ink-light">
+        <MapPin size={12} /> {r.district}
+      </p>
+
+      {/* Nivel 3: presupuesto — el elemento con más peso visual */}
+      <p className="text-2xl font-extrabold text-brand">
+        {formatBudget(r.max_budget)}
+        {r.operation === 'rent' && <span className="text-sm font-normal text-ink-light"> /mes</span>}
+      </p>
+
+      {/* Nivel 4: características */}
+      <div className="flex flex-wrap items-center gap-3 text-xs text-ink-light">
+        {r.bedrooms != null && (
+          <span className="flex items-center gap-1">
+            <BedDouble size={13} /> {r.bedrooms}+ dorm.
           </span>
-          <span className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-brand-soft px-2 py-0.5 text-[11px] font-semibold text-brand shadow-card">
-            <Users size={11} /> Cliente
+        )}
+        {r.bathrooms != null && (
+          <span className="flex items-center gap-1">
+            <Bath size={13} /> {r.bathrooms}+ baños
           </span>
+        )}
+        {r.min_area_m2 != null && (
+          <span className="flex items-center gap-1">
+            <Ruler size={13} /> {r.min_area_m2}+ m²
+          </span>
+        )}
+        {r.parking && (
+          <span className="flex items-center gap-1">
+            <Car size={13} /> Cochera
+          </span>
+        )}
+      </div>
+
+      {/* Nivel 5: fecha esperada, destacada */}
+      <p className="flex items-center gap-1.5 rounded-input bg-brand-soft px-3 py-2 text-sm font-semibold text-brand">
+        <Calendar size={14} /> {expectedDatePhrase(r.urgency)}
+      </p>
+
+      {/* Nivel 6: descripción, máx. 2 líneas */}
+      {r.description && (
+        <div>
+          <p className="line-clamp-2 text-sm text-ink-light">{r.description}</p>
+          <span className="text-xs font-semibold text-brand hover:underline">Ver más</span>
         </div>
+      )}
 
-        <div className="flex flex-col gap-2 p-4 pb-2">
-          <span className="text-lg font-bold text-ink">
-            {formatBudget(r.max_budget)}
-            {r.operation === 'rent' && <span className="text-sm font-normal text-ink-light"> /mes</span>}
-          </span>
-          <h3 className="line-clamp-2 text-sm font-semibold text-ink">{title}</h3>
-          <p className="text-xs text-ink-light">
-            {typeLabel} · {r.district}
-          </p>
-
-          <div className="mt-1 flex items-center gap-4 text-xs text-ink-light">
-            {r.min_area_m2 != null && (
-              <span className="flex items-center gap-1">
-                <Ruler size={13} /> {r.min_area_m2}+ m²
-              </span>
-            )}
-            {r.bedrooms != null && (
-              <span className="flex items-center gap-1">
-                <BedDouble size={13} /> {r.bedrooms}+
-              </span>
-            )}
-            {r.bathrooms != null && (
-              <span className="flex items-center gap-1">
-                <Bath size={13} /> {r.bathrooms}+
-              </span>
-            )}
-          </div>
-
-          <p className="flex items-center gap-1.5 text-xs font-semibold text-brand">
-            <Calendar size={13} /> {expectedDatePhrase(r.urgency)}
-          </p>
-        </div>
-      </Link>
-
-      <div className="flex items-center gap-2 px-4 pb-4 pt-1">
-        <Link to={`/requerimientos/${r.id}`} className="flex-1">
-          <button className="flex h-9 w-full items-center justify-center gap-1.5 rounded-input bg-brand text-sm font-semibold text-white hover:bg-brand-hover">
-            Ver requerimiento
-          </button>
-        </Link>
+      {/* Acciones: no navegan al detalle */}
+      <div className="mt-1 flex gap-2 border-t border-border pt-3" onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          onClick={handleContactClick}
+          className={`flex h-9 flex-1 items-center justify-center gap-1.5 rounded-input text-sm font-semibold transition ${
+            contacted ? 'bg-success-soft text-success hover:bg-success/20' : 'bg-brand text-white hover:bg-brand-hover'
+          }`}
+        >
+          {contacted ? <CheckCircle2 size={14} /> : <MessageCircle size={14} />}
+          {contacted ? 'Ya contactado' : 'Contactar'}
+        </button>
         <button
           type="button"
           onClick={toggleFavorite}
@@ -107,6 +160,18 @@ export function RequirementCard({ requirement: r, initialFavorite }: Requirement
           <Heart size={15} fill={isFavorite ? 'currentColor' : 'none'} />
         </button>
       </div>
+
+      {user && user.id !== r.buyer_id && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <RequirementContactModal
+            open={contactOpen}
+            onClose={() => setContactOpen(false)}
+            requirementId={r.id}
+            alreadyContacted={contacted}
+            onContacted={() => setContacted(true)}
+          />
+        </div>
+      )}
     </div>
   );
 }

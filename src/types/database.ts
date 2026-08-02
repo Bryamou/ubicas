@@ -117,6 +117,19 @@ export interface Requirement {
   updated_at: string;
 }
 
+export interface RequirementContact {
+  id: string;
+  requirement_id: string;
+  contacter_id: string;
+  contacter_role: UserRole;
+  pitch: string;
+  contact_name: string;
+  contact_phone: string | null;
+  contact_email: string | null;
+  status: 'pending' | 'attended';
+  created_at: string;
+}
+
 export interface RequirementAgentProposal {
   id: string;
   requirement_id: string;

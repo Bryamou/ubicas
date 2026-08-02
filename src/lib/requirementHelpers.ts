@@ -55,23 +55,36 @@ export function publishedLabel(dateStr: string): string {
   return `Publicado hace ${days} días`;
 }
 
-export interface RequirementBadge {
+export interface OpportunityBadge {
   label: string;
-  tone: 'brand' | 'warning' | 'success';
+  tone: 'danger' | 'warning' | 'success';
+  emoji: string;
 }
 
-/** Calcula el badge de mayor prioridad para una tarjeta: compra inmediata
- * > urgente > nuevo > sin badge. */
-export function getRequirementBadge(requirement: Requirement): RequirementBadge | null {
-  const isUrgent = requirement.urgency === 'asap';
-  if (requirement.operation === 'sale' && isUrgent) {
-    return { label: 'Compra inmediata', tone: 'brand' };
+/** Indicador de Oportunidad (HU-012): calculado automáticamente según la
+ * urgencia declarada por el cliente. No es editable manualmente y se
+ * recalcula solo si la urgencia cambia. */
+export function getOpportunityBadge(urgency: RequirementUrgency | null): OpportunityBadge {
+  if (urgency === 'asap' || urgency === 'within_30_days') {
+    return { label: 'Urgente', tone: 'danger', emoji: '🔴' };
   }
-  if (isUrgent) {
-    return { label: 'Urgente', tone: 'warning' };
+  if (urgency === '1_3_months') {
+    return { label: 'Próximo', tone: 'warning', emoji: '🟡' };
   }
-  if (publishedDaysAgo(requirement.created_at) <= 3) {
-    return { label: 'Nuevo', tone: 'success' };
-  }
-  return null;
+  return { label: 'Flexible', tone: 'success', emoji: '🟢' };
+}
+
+/** Completitud del requerimiento (0-100): operación y presupuesto siempre
+ * están presentes (son obligatorios al publicar), así que parten en 40%.
+ * El resto se suma según cuántos datos opcionales se completaron —
+ * mientras más completo, más confían propietarios y agentes en la
+ * oportunidad, y mejor puede priorizarse en el listado. */
+export function getCompletenessScore(requirement: Requirement): number {
+  let score = 40;
+  if (requirement.bedrooms != null) score += 15;
+  if (requirement.bathrooms != null) score += 15;
+  if (requirement.min_area_m2 != null) score += 10;
+  if (requirement.parking || requirement.pets) score += 10;
+  if ((requirement.description ?? '').trim().length >= 50) score += 10;
+  return Math.min(100, score);
 }

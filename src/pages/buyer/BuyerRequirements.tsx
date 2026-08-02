@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { ClipboardList } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBuyerRequirements } from '@/hooks/useBuyerData';
+import { getCompletenessScore } from '@/lib/requirementHelpers';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -70,6 +71,29 @@ export function BuyerRequirementsPage() {
             <p className="mt-1 text-xs text-ink-light">
               Publicado el {new Date(r.created_at).toLocaleDateString('es-PE')}
             </p>
+            <div className="mt-2 max-w-[220px]">
+              {(() => {
+                const completeness = getCompletenessScore(r);
+                return (
+                  <>
+                    <div className="mb-1 flex items-center justify-between text-[11px] font-medium text-ink-light">
+                      <span>{completeness === 100 ? 'Requerimiento completo' : `${completeness}% completo`}</span>
+                    </div>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
+                      <div
+                        className={`h-full rounded-full transition-all ${completeness === 100 ? 'bg-success' : 'bg-brand'}`}
+                        style={{ width: `${completeness}%` }}
+                      />
+                    </div>
+                    {completeness < 100 && (
+                      <p className="mt-1 text-[11px] text-ink-light">
+                        Completa más datos para recibir más contactos.
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             {actionsFor(r.status).map((a) => (

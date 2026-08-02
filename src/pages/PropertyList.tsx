@@ -25,6 +25,7 @@ interface PropertyWithCover extends Property {
   isAgentListed: boolean;
   viewsCount?: number;
   isFavorite?: boolean;
+  isContacted?: boolean;
 }
 
 const propertyTypeOptions = [
@@ -223,7 +224,7 @@ export function PropertyListPage() {
       }
 
       const ids = list.map((p) => p.id);
-      const [{ data: images }, { data: assignments }, { data: views }, { data: favs }] = await Promise.all([
+      const [{ data: images }, { data: assignments }, { data: views }, { data: favs }, { data: contacts }] = await Promise.all([
         supabase
           .from('property_images')
           .select('property_id, storage_path, is_primary, sort_order')
@@ -236,9 +237,13 @@ export function PropertyListPage() {
         user
           ? supabase.from('favorites').select('property_id').eq('user_id', user.id).in('property_id', ids)
           : Promise.resolve({ data: null }),
+        user
+          ? supabase.from('contact_requests').select('property_id').eq('requester_id', user.id).in('property_id', ids)
+          : Promise.resolve({ data: null }),
       ]);
 
       const favoriteSet = new Set((favs ?? []).map((f: any) => f.property_id));
+      const contactedSet = new Set((contacts ?? []).map((c: any) => c.property_id));
 
       const coverMap = new Map<string, string>();
       (images ?? []).forEach((img: any) => {
@@ -257,6 +262,7 @@ export function PropertyListPage() {
         isAgentListed: agentPropertyIds.has(p.id),
         viewsCount: viewCountMap.get(p.id) ?? 0,
         isFavorite: favoriteSet.has(p.id),
+        isContacted: contactedSet.has(p.id),
       }));
 
       if (sort === 'most_viewed') {
@@ -520,6 +526,7 @@ export function PropertyListPage() {
                   coverImageUrl={p.coverImageUrl}
                   isAgentListed={p.isAgentListed}
                   initialFavorite={p.isFavorite}
+                  initialContacted={p.isContacted}
                 />
               ))}
             </div>

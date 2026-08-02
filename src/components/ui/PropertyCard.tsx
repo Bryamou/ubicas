@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { BedDouble, Bath, Ruler, ShieldCheck, User, Heart, MessageCircle } from 'lucide-react';
+import { BedDouble, Bath, Ruler, ShieldCheck, User, Heart, MessageCircle, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { ContactRequestModal } from '@/components/ContactRequestModal';
+import { getContactedPropertyIds } from '@/lib/guestContact';
 import type { Property } from '@/types/database';
 
 const typeLabels: Record<string, string> = {
@@ -20,6 +21,9 @@ interface PropertyCardProps {
   coverImageUrl?: string | null;
   isAgentListed?: boolean;
   initialFavorite?: boolean;
+  /** Si ya se contactó antes (cuenta logueada, calculado por el padre en
+   * lote). Para invitados sin cuenta, se revisa localStorage aparte. */
+  initialContacted?: boolean;
 }
 
 function formatPrice(price: number, currency: string) {
@@ -27,12 +31,15 @@ function formatPrice(price: number, currency: string) {
   return `${symbol} ${price.toLocaleString('es-PE')}`;
 }
 
-export function PropertyCard({ property, coverImageUrl, isAgentListed, initialFavorite }: PropertyCardProps) {
+export function PropertyCard({ property, coverImageUrl, isAgentListed, initialFavorite, initialContacted }: PropertyCardProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [isFavorite, setIsFavorite] = useState(!!initialFavorite);
   const [savingFavorite, setSavingFavorite] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
+  const [contacted, setContacted] = useState(
+    () => !!initialContacted || (!user && getContactedPropertyIds().has(property.id))
+  );
 
   const toggleFavorite = async () => {
     if (!user) {
@@ -43,7 +50,12 @@ export function PropertyCard({ property, coverImageUrl, isAgentListed, initialFa
     if (isFavorite) {
       await supabase.from('favorites').delete().eq('property_id', property.id).eq('user_id', user.id);
     } else {
-      await supabase.from('favorites').insert({ property_id: property.id, user_id: user.id });
+      const { error } = await supabase.from('favorites').insert({ property_id: property.id, user_id: user.id });
+      if (error) {
+        alert(error.message);
+        setSavingFavorite(false);
+        return;
+      }
     }
     setIsFavorite(!isFavorite);
     setSavingFavorite(false);
@@ -114,9 +126,12 @@ export function PropertyCard({ property, coverImageUrl, isAgentListed, initialFa
         <button
           type="button"
           onClick={() => setContactOpen(true)}
-          className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-input bg-brand text-sm font-semibold text-white hover:bg-brand-hover"
+          className={`flex h-9 flex-1 items-center justify-center gap-1.5 rounded-input text-sm font-semibold transition ${
+            contacted ? 'bg-success-soft text-success hover:bg-success/20' : 'bg-brand text-white hover:bg-brand-hover'
+          }`}
         >
-          <MessageCircle size={14} /> Contactar
+          {contacted ? <CheckCircle2 size={14} /> : <MessageCircle size={14} />}
+          {contacted ? 'Ver contacto' : 'Contactar'}
         </button>
         <button
           type="button"
@@ -129,7 +144,13 @@ export function PropertyCard({ property, coverImageUrl, isAgentListed, initialFa
         </button>
       </div>
 
-      <ContactRequestModal open={contactOpen} onClose={() => setContactOpen(false)} propertyId={property.id} />
+      <ContactRequestModal
+        open={contactOpen}
+        onClose={() => setContactOpen(false)}
+        property={property}
+        alreadyContacted={contacted}
+        onContacted={() => setContacted(true)}
+      />
     </div>
   );
 }

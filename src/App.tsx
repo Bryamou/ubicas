@@ -23,7 +23,7 @@ import { AgentProfilePage } from '@/pages/agent/AgentProfile';
 import { RequirementsListPage } from '@/pages/RequirementsList';
 import { RequirementDetailPage } from '@/pages/RequirementDetail';
 import { BuyerPanelLayout } from '@/layouts/BuyerPanelLayout';
-import { BuyerFavoritesPage } from '@/pages/buyer/BuyerFavorites';
+import { FavoritesPage } from '@/pages/FavoritesPage';
 import { BuyerContactsPage } from '@/pages/buyer/BuyerContacts';
 import { BuyerRequirementsPage } from '@/pages/buyer/BuyerRequirements';
 import { BuyerProposalsPage } from '@/pages/buyer/BuyerProposals';
@@ -63,6 +63,7 @@ export function App() {
             <Route path="/panel/propietario" element={<OwnerPanelLayout />}>
               <Route index element={<OwnerDashboardPage />} />
               <Route path="inmuebles" element={<OwnerPropertiesPage />} />
+              <Route path="favoritos" element={<FavoritesPage />} />
               <Route path="contactos" element={<OwnerContactsPage />} />
               <Route path="propuestas" element={<OwnerProposalsPage />} />
               <Route path="metricas" element={<OwnerMetricsPage />} />
@@ -75,6 +76,7 @@ export function App() {
             <Route path="/panel/agente" element={<AgentPanelLayout />}>
               <Route index element={<AgentDashboardPage />} />
               <Route path="inmuebles" element={<AgentPropertiesPage />} />
+              <Route path="favoritos" element={<FavoritesPage />} />
               <Route path="propuestas" element={<AgentProposalsPage />} />
               <Route path="perfil" element={<AgentProfilePage />} />
             </Route>
@@ -84,7 +86,7 @@ export function App() {
           <Route element={<ProtectedRoute allowedRoles={['buyer']} />}>
             <Route path="/publicar-requerimiento" element={<PublishRequirementPage />} />
             <Route path="/panel/comprador" element={<BuyerPanelLayout />}>
-              <Route index element={<BuyerFavoritesPage />} />
+              <Route index element={<FavoritesPage />} />
               <Route path="contactos" element={<BuyerContactsPage />} />
               <Route path="requerimientos" element={<BuyerRequirementsPage />} />
               <Route path="propuestas" element={<BuyerProposalsPage />} />
