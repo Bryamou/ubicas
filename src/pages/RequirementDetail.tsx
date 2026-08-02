@@ -22,7 +22,7 @@ import type { Requirement, ProposalStatus } from '@/types/database';
 
 export function RequirementDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
