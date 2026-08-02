@@ -18,7 +18,7 @@ import {
   getOpportunityBadge,
   getCompletenessScore,
 } from '@/lib/requirementHelpers';
-import type { Requirement } from '@/types/database';
+import type { Requirement, ProposalStatus } from '@/types/database';
 
 export function RequirementDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -30,6 +30,7 @@ export function RequirementDetailPage() {
   const [loading, setLoading] = useState(true);
   const [contactOpen, setContactOpen] = useState(false);
   const [contacted, setContacted] = useState(false);
+  const [proposalStatus, setProposalStatus] = useState<ProposalStatus | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteError, setFavoriteError] = useState<string | null>(null);
   const [savingFavorite, setSavingFavorite] = useState(false);
@@ -50,13 +51,24 @@ export function RequirementDetailPage() {
           .maybeSingle();
         setIsFavorite(!!fav);
 
-        const { data: existingContact } = await supabase
-          .from('requirement_contacts')
-          .select('id')
-          .eq('requirement_id', id)
-          .eq('contacter_id', user.id)
-          .maybeSingle();
-        setContacted(!!existingContact);
+        if (profile?.role === 'agent') {
+          const { data: proposal } = await supabase
+            .from('requirement_agent_proposals')
+            .select('id, status')
+            .eq('requirement_id', id)
+            .eq('agent_id', user.id)
+            .maybeSingle();
+          setContacted(!!proposal);
+          setProposalStatus(proposal?.status ?? null);
+        } else {
+          const { data: existingContact } = await supabase
+            .from('requirement_contacts')
+            .select('id')
+            .eq('requirement_id', id)
+            .eq('contacter_id', user.id)
+            .maybeSingle();
+          setContacted(!!existingContact);
+        }
       }
       setLoading(false);
     })();
@@ -266,6 +278,7 @@ export function RequirementDetailPage() {
           onClose={() => setContactOpen(false)}
           requirementId={r.id}
           alreadyContacted={contacted}
+          existingProposalStatus={proposalStatus}
           onContacted={() => setContacted(true)}
         />
       )}

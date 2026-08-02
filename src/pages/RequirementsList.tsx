@@ -16,11 +16,12 @@ import { SortDropdown } from '@/components/SortDropdown';
 import { FilterSidePanel } from '@/components/FilterSidePanel';
 import { Button } from '@/components/ui/Button';
 import { requirementTypeLabels, urgencyOptions } from '@/lib/requirementHelpers';
-import type { Requirement } from '@/types/database';
+import type { Requirement, ProposalStatus } from '@/types/database';
 
 interface RequirementWithFavorite extends Requirement {
   isFavorite?: boolean;
   isContacted?: boolean;
+  proposalStatus?: ProposalStatus | null;
 }
 
 const propertyTypeOptions = Object.entries(requirementTypeLabels)
@@ -43,7 +44,7 @@ const publishedWithinOptions = [
 ];
 
 export function RequirementsListPage() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [requirements, setRequirements] = useState<RequirementWithFavorite[]>([]);
   const [loading, setLoading] = useState(true);
@@ -204,13 +205,27 @@ export function RequirementsListPage() {
       let withFavorites: RequirementWithFavorite[] = list;
       if (user && list.length > 0) {
         const ids = list.map((r) => r.id);
+        const isAgent = profile?.role === 'agent';
         const [{ data: favs }, { data: contacts }] = await Promise.all([
           supabase.from('favorites').select('requirement_id').eq('user_id', user.id).in('requirement_id', ids),
-          supabase.from('requirement_contacts').select('requirement_id').eq('contacter_id', user.id).in('requirement_id', ids),
+          isAgent
+            ? supabase
+                .from('requirement_agent_proposals')
+                .select('requirement_id, status')
+                .eq('agent_id', user.id)
+                .in('requirement_id', ids)
+            : supabase.from('requirement_contacts').select('requirement_id').eq('contacter_id', user.id).in('requirement_id', ids),
         ]);
         const favSet = new Set((favs ?? []).map((f: any) => f.requirement_id));
         const contactedSet = new Set((contacts ?? []).map((c: any) => c.requirement_id));
-        withFavorites = list.map((r) => ({ ...r, isFavorite: favSet.has(r.id), isContacted: contactedSet.has(r.id) }));
+        const statusMap = new Map<string, ProposalStatus>();
+        if (isAgent) (contacts ?? []).forEach((c: any) => statusMap.set(c.requirement_id, c.status));
+        withFavorites = list.map((r) => ({
+          ...r,
+          isFavorite: favSet.has(r.id),
+          isContacted: contactedSet.has(r.id),
+          proposalStatus: statusMap.get(r.id) ?? null,
+        }));
       }
 
       setRequirements(withFavorites);
@@ -233,6 +248,7 @@ export function RequirementsListPage() {
     keyword,
     sort,
     user,
+    profile,
   ]);
 
   const resultsLabel = useMemo(() => {
@@ -436,7 +452,13 @@ export function RequirementsListPage() {
           ) : (
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {requirements.map((r) => (
-                <RequirementCard key={r.id} requirement={r} initialFavorite={r.isFavorite} initialContacted={r.isContacted} />
+                <RequirementCard
+                  key={r.id}
+                  requirement={r}
+                  initialFavorite={r.isFavorite}
+                  initialContacted={r.isContacted}
+                  proposalStatus={r.proposalStatus}
+                />
               ))}
             </div>
           )}

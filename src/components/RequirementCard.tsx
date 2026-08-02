@@ -4,13 +4,14 @@ import { MapPin, BedDouble, Bath, Ruler, Car, Calendar, Heart, MessageCircle, Ch
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { RequirementContactModal } from '@/components/RequirementContactModal';
-import type { Requirement } from '@/types/database';
+import type { Requirement, ProposalStatus } from '@/types/database';
 import { requirementTypeLabels, formatBudget, expectedDatePhrase, getOpportunityBadge } from '@/lib/requirementHelpers';
 
 interface RequirementCardProps {
   requirement: Requirement;
   initialFavorite?: boolean;
   initialContacted?: boolean;
+  proposalStatus?: ProposalStatus | null;
 }
 
 const toneClasses: Record<string, string> = {
@@ -25,7 +26,7 @@ const toneClasses: Record<string, string> = {
  * (usan stopPropagation para no disparar la navegación). Resumen
  * ejecutivo sin fotos, con el presupuesto como elemento dominante.
  */
-export function RequirementCard({ requirement: r, initialFavorite, initialContacted }: RequirementCardProps) {
+export function RequirementCard({ requirement: r, initialFavorite, initialContacted, proposalStatus }: RequirementCardProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [isFavorite, setIsFavorite] = useState(!!initialFavorite);
@@ -77,7 +78,7 @@ export function RequirementCard({ requirement: r, initialFavorite, initialContac
       tabIndex={0}
       onClick={goToDetail}
       onKeyDown={(e) => e.key === 'Enter' && goToDetail()}
-      className="flex cursor-pointer flex-col gap-3 rounded-card border border-border bg-white p-5 shadow-card transition hover:shadow-soft"
+      className="flex h-full cursor-pointer flex-col gap-3 rounded-card border border-border bg-white p-5 shadow-card transition hover:shadow-soft"
     >
       {/* Nivel 1: operación + indicador de oportunidad */}
       <div className="flex items-start justify-between gap-2">
@@ -138,8 +139,9 @@ export function RequirementCard({ requirement: r, initialFavorite, initialContac
         </div>
       )}
 
-      {/* Acciones: no navegan al detalle */}
-      <div className="mt-1 flex gap-2 border-t border-border pt-3" onClick={(e) => e.stopPropagation()}>
+      {/* Acciones: no navegan al detalle. mt-auto asegura que quede
+          siempre pegado abajo, aunque la descripción varíe de largo. */}
+      <div className="mt-auto flex gap-2 border-t border-border pt-3" onClick={(e) => e.stopPropagation()}>
         <button
           type="button"
           onClick={handleContactClick}
@@ -168,6 +170,7 @@ export function RequirementCard({ requirement: r, initialFavorite, initialContac
             onClose={() => setContactOpen(false)}
             requirementId={r.id}
             alreadyContacted={contacted}
+            existingProposalStatus={proposalStatus}
             onContacted={() => setContacted(true)}
           />
         </div>

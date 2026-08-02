@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Phone, Mail, User, MessageCircle, Percent } from 'lucide-react';
+import { Phone, Mail, User, MessageCircle, Percent, XCircle, Clock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { getOrCreateConversation } from '@/hooks/useConversations';
@@ -10,15 +10,16 @@ import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
-import type { Property } from '@/types/database';
+import type { Property, ProposalStatus } from '@/types/database';
 
 interface ContactRequestModalProps {
   open: boolean;
   onClose: () => void;
   property: Property;
-  /** Si ya se contactó antes (cuenta o mismo dispositivo), abre directo en
-   * la vista de "ya contactado" en vez del formulario. */
+  /** Estado de un contacto/propuesta previo, si existe (calculado por el
+   * padre para no repetir la consulta en cada tarjeta). */
   alreadyContacted?: boolean;
+  existingProposalStatus?: ProposalStatus | null;
   onContacted: () => void;
 }
 
@@ -29,13 +30,17 @@ interface ContactTarget {
   agentId: string | null;
 }
 
-async function fetchContactTarget(property: Property): Promise<ContactTarget> {
-  const { data: assignment } = await supabase
+async function fetchAssignedAgent(propertyId: string) {
+  const { data } = await supabase
     .from('property_agent_assignments')
     .select('agent_id, agent:profiles!property_agent_assignments_agent_id_fkey(full_name, phone)')
-    .eq('property_id', property.id)
+    .eq('property_id', propertyId)
     .maybeSingle();
+  return data;
+}
 
+async function fetchContactTarget(property: Property): Promise<ContactTarget> {
+  const assignment = await fetchAssignedAgent(property.id);
   if (assignment?.agent) {
     return {
       name: (assignment.agent as any).full_name,
@@ -52,23 +57,36 @@ async function fetchContactTarget(property: Property): Promise<ContactTarget> {
   };
 }
 
-export function ContactRequestModal({ open, onClose, property, alreadyContacted, onContacted }: ContactRequestModalProps) {
+export function ContactRequestModal({
+  open,
+  onClose,
+  property,
+  alreadyContacted,
+  existingProposalStatus,
+  onContacted,
+}: ContactRequestModalProps) {
   const { user, profile } = useAuth();
-  const isAgentOffering = profile?.role === 'agent' && property.owner_id !== user?.id;
+  const isAgent = profile?.role === 'agent' && property.owner_id !== user?.id;
 
   const [view, setView] = useState<'form' | 'revealed'>('form');
   const [target, setTarget] = useState<ContactTarget | null>(null);
+  const [assignedAgentId, setAssignedAgentId] = useState<string | null>(null);
+  const [baseCommission, setBaseCommission] = useState<number | null>(null);
+  const [checkingAssignment, setCheckingAssignment] = useState(true);
 
   // Formulario nombre/correo/teléfono (invitado, propietario, comprador)
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
 
-  // Formulario del agente
+  // Formulario del agente: proponerse como representante
   const [pitch, setPitch] = useState('');
   const [commissionValue, setCommissionValue] = useState('');
 
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  // Formulario del agente: compartir comisión con el agente ya asignado
+  const [sharePercent, setSharePercent] = useState('50');
+  const [shareMessage, setShareMessage] = useState('');
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [messaging, setMessaging] = useState(false);
@@ -76,9 +94,33 @@ export function ContactRequestModal({ open, onClose, property, alreadyContacted,
   useEffect(() => {
     if (!open) return;
     setError(null);
-    setErrors({});
     setPitch('');
     setCommissionValue('');
+    setShareMessage('');
+    setSharePercent('50');
+    setCheckingAssignment(true);
+
+    (async () => {
+      const assignment = await fetchAssignedAgent(property.id);
+      setAssignedAgentId(assignment?.agent_id ?? null);
+      if (assignment?.agent_id && isAgent) {
+        // Trae la comisión pactada del agente asignado para calcular el reparto
+        const { data: accepted } = await supabase
+          .from('agent_proposals')
+          .select('commission_percent, commission_amount')
+          .eq('property_id', property.id)
+          .eq('agent_id', assignment.agent_id)
+          .eq('status', 'accepted')
+          .maybeSingle();
+        if (accepted) {
+          const total = accepted.commission_percent
+            ? (accepted.commission_percent / 100) * property.price
+            : (accepted.commission_amount ?? 0);
+          setBaseCommission(total);
+        }
+      }
+      setCheckingAssignment(false);
+    })();
 
     if (alreadyContacted) {
       fetchContactTarget(property).then((t) => {
@@ -102,6 +144,8 @@ export function ContactRequestModal({ open, onClose, property, alreadyContacted,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, alreadyContacted]);
 
+  const isSharingCommission = isAgent && !!assignedAgentId && assignedAgentId !== user?.id;
+
   const reveal = async () => {
     const t = await fetchContactTarget(property);
     setTarget(t);
@@ -110,11 +154,13 @@ export function ContactRequestModal({ open, onClose, property, alreadyContacted,
   };
 
   const handleSubmitContact = async () => {
-    const newErrors: Record<string, string> = {};
-    if (!name.trim()) newErrors.name = 'Ingresa tu nombre.';
-    if (!email.trim()) newErrors.email = 'Ingresa tu correo.';
-    setErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) return;
+    const newErrors: string[] = [];
+    if (!name.trim()) newErrors.push('nombre');
+    if (!email.trim()) newErrors.push('correo');
+    if (newErrors.length > 0) {
+      setError('Completa tu ' + newErrors.join(' y '));
+      return;
+    }
 
     setSaving(true);
     setError(null);
@@ -172,6 +218,38 @@ export function ContactRequestModal({ open, onClose, property, alreadyContacted,
     await reveal();
   };
 
+  const handleSubmitCommissionShare = async () => {
+    if (!user || !assignedAgentId) return;
+    const pct = Number(sharePercent);
+    if (!pct || pct < 10 || pct > 90) {
+      setError('El porcentaje debe estar entre 10% y 90%.');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+
+    const { error: insertError } = await supabase.from('commission_share_proposals').insert({
+      property_id: property.id,
+      requesting_agent_id: user.id,
+      assigned_agent_id: assignedAgentId,
+      share_percent: pct,
+      message: shareMessage.trim() || null,
+      status: 'pending',
+    });
+
+    setSaving(false);
+
+    if (insertError) {
+      setError(
+        insertError.message.includes('duplicate') || insertError.message.includes('unique')
+          ? 'Ya tienes una propuesta de comisión pendiente para este inmueble.'
+          : insertError.message
+      );
+      return;
+    }
+    await reveal();
+  };
+
   const sendMessage = async () => {
     if (!user || !target?.agentId) return;
     setMessaging(true);
@@ -189,13 +267,37 @@ export function ContactRequestModal({ open, onClose, property, alreadyContacted,
       ? (Number(commissionValue) / property.price) * 100
       : null;
 
+  const myShare = baseCommission != null ? (Number(sharePercent || 0) / 100) * baseCommission : null;
+  const theirShare = baseCommission != null && myShare != null ? baseCommission - myShare : null;
+
+  const statusMessage =
+    existingProposalStatus === 'rejected'
+      ? 'El propietario o agente rechazó tu propuesta.'
+      : existingProposalStatus === 'pending'
+        ? 'Tu propuesta ya fue enviada. Puedes revisar el estado en tu bandeja de propuestas.'
+        : null;
+
   return (
     <Modal open={open} onClose={onClose} title={view === 'revealed' ? 'Datos de contacto' : 'Contactar'}>
       {view === 'revealed' && target ? (
         <div className="flex flex-col gap-4">
-          <Alert type="success">
-            {isAgentOffering ? 'Tu propuesta fue enviada.' : 'Tu solicitud fue enviada.'} Aquí tienes los datos de contacto.
-          </Alert>
+          {existingProposalStatus === 'rejected' ? (
+            <Alert type="error">
+              <span className="flex items-center gap-1.5">
+                <XCircle size={14} /> {statusMessage}
+              </span>
+            </Alert>
+          ) : statusMessage ? (
+            <Alert type="warning">
+              <span className="flex items-center gap-1.5">
+                <Clock size={14} /> {statusMessage}
+              </span>
+            </Alert>
+          ) : (
+            <Alert type="success">
+              {isAgent ? 'Tu propuesta fue enviada.' : 'Tu solicitud fue enviada.'} Aquí tienes los datos de contacto.
+            </Alert>
+          )}
           <div className="flex items-center gap-3 rounded-card border border-border p-4">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-soft text-brand">
               <User size={18} />
@@ -223,7 +325,48 @@ export function ContactRequestModal({ open, onClose, property, alreadyContacted,
             Cerrar
           </Button>
         </div>
-      ) : isAgentOffering ? (
+      ) : checkingAssignment ? (
+        <p className="py-6 text-center text-sm text-ink-light">Cargando…</p>
+      ) : isSharingCommission ? (
+        <div className="flex flex-col gap-4">
+          {error && <Alert type="error">{error}</Alert>}
+          <p className="text-sm text-ink-light">
+            Este inmueble ya tiene un agente asignado. Puedes proponerle compartir su comisión a cambio de traerle un
+            cliente.
+          </p>
+          <Textarea
+            label="Mensaje (opcional)"
+            placeholder="Hola, tengo un cliente interesado en este inmueble. ¿Compartimos comisión?"
+            value={shareMessage}
+            onChange={(e) => setShareMessage(e.target.value)}
+          />
+          <Input
+            label="% de la comisión que pides (10% - 90%)"
+            type="number"
+            min={10}
+            max={90}
+            value={sharePercent}
+            onChange={(e) => setSharePercent(e.target.value)}
+          />
+          {baseCommission != null ? (
+            <div className="rounded-card border border-border bg-surface-muted p-3 text-sm text-ink-light">
+              Comisión total pactada: <strong className="text-ink">S/ {baseCommission.toLocaleString('es-PE')}</strong>
+              {myShare != null && theirShare != null && (
+                <p className="mt-1">
+                  Para ti: <strong className="text-brand">S/ {myShare.toLocaleString('es-PE', { maximumFractionDigits: 0 })}</strong>
+                  {' · '}
+                  Para el agente actual: <strong className="text-ink">S/ {theirShare.toLocaleString('es-PE', { maximumFractionDigits: 0 })}</strong>
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-ink-light">No se encontró el monto exacto de la comisión pactada; se calculará al aceptar.</p>
+          )}
+          <Button variant="primary" icon={<Percent size={16} />} onClick={handleSubmitCommissionShare} loading={saving}>
+            Enviar propuesta
+          </Button>
+        </div>
+      ) : isAgent ? (
         <div className="flex flex-col gap-4">
           {error && <Alert type="error">{error}</Alert>}
           <p className="text-sm text-ink-light">
@@ -256,8 +399,8 @@ export function ContactRequestModal({ open, onClose, property, alreadyContacted,
       ) : (
         <div className="flex flex-col gap-4">
           {error && <Alert type="error">{error}</Alert>}
-          <Input label="Nombre" value={name} onChange={(e) => setName(e.target.value)} error={errors.name} />
-          <Input label="Correo" type="email" value={email} onChange={(e) => setEmail(e.target.value)} error={errors.email} />
+          <Input label="Nombre" value={name} onChange={(e) => setName(e.target.value)} />
+          <Input label="Correo" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           <Input label="Teléfono (opcional)" value={phone} onChange={(e) => setPhone(e.target.value)} />
           {!user && (
             <p className="text-xs text-ink-light">

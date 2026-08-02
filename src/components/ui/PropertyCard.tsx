@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { ContactRequestModal } from '@/components/ContactRequestModal';
 import { getContactedPropertyIds } from '@/lib/guestContact';
-import type { Property } from '@/types/database';
+import type { Property, ProposalStatus } from '@/types/database';
 
 const typeLabels: Record<string, string> = {
   apartment: 'Departamento',
@@ -24,6 +24,9 @@ interface PropertyCardProps {
   /** Si ya se contactó antes (cuenta logueada, calculado por el padre en
    * lote). Para invitados sin cuenta, se revisa localStorage aparte. */
   initialContacted?: boolean;
+  /** Estado de la propuesta del agente (si aplica), para mostrar mensaje
+   * de "pendiente" o "rechazada" al reabrir. */
+  proposalStatus?: ProposalStatus | null;
 }
 
 function formatPrice(price: number, currency: string) {
@@ -31,7 +34,14 @@ function formatPrice(price: number, currency: string) {
   return `${symbol} ${price.toLocaleString('es-PE')}`;
 }
 
-export function PropertyCard({ property, coverImageUrl, isAgentListed, initialFavorite, initialContacted }: PropertyCardProps) {
+export function PropertyCard({
+  property,
+  coverImageUrl,
+  isAgentListed,
+  initialFavorite,
+  initialContacted,
+  proposalStatus,
+}: PropertyCardProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [isFavorite, setIsFavorite] = useState(!!initialFavorite);
@@ -62,8 +72,8 @@ export function PropertyCard({ property, coverImageUrl, isAgentListed, initialFa
   };
 
   return (
-    <div className="group flex flex-col overflow-hidden rounded-card border border-border bg-white shadow-card transition hover:shadow-soft">
-      <Link to={`/inmuebles/${property.id}`}>
+    <div className="group flex h-full flex-col overflow-hidden rounded-card border border-border bg-white shadow-card transition hover:shadow-soft">
+      <Link to={`/inmuebles/${property.id}`} className="flex flex-1 flex-col">
         <div className="relative aspect-[4/3] w-full overflow-hidden bg-surface-muted">
           {coverImageUrl ? (
             <img
@@ -149,6 +159,7 @@ export function PropertyCard({ property, coverImageUrl, isAgentListed, initialFa
         onClose={() => setContactOpen(false)}
         property={property}
         alreadyContacted={contacted}
+        existingProposalStatus={proposalStatus}
         onContacted={() => setContacted(true)}
       />
     </div>

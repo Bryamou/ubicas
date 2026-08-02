@@ -18,7 +18,7 @@ import { SortDropdown } from '@/components/SortDropdown';
 import { FilterSidePanel } from '@/components/FilterSidePanel';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import type { OperationType, Property, PropertyType } from '@/types/database';
+import type { OperationType, Property, PropertyType, ProposalStatus } from '@/types/database';
 
 interface PropertyWithCover extends Property {
   coverImageUrl: string | null;
@@ -26,6 +26,7 @@ interface PropertyWithCover extends Property {
   viewsCount?: number;
   isFavorite?: boolean;
   isContacted?: boolean;
+  proposalStatus?: ProposalStatus | null;
 }
 
 const propertyTypeOptions = [
@@ -56,7 +57,7 @@ const publishedWithinOptions = [
 ];
 
 export function PropertyListPage() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [properties, setProperties] = useState<PropertyWithCover[]>([]);
   const [loading, setLoading] = useState(true);
@@ -224,7 +225,7 @@ export function PropertyListPage() {
       }
 
       const ids = list.map((p) => p.id);
-      const [{ data: images }, { data: assignments }, { data: views }, { data: favs }, { data: contacts }] = await Promise.all([
+      const [{ data: images }, { data: assignments }, { data: views }, { data: favs }, { data: contacts }, { data: shares }] = await Promise.all([
         supabase
           .from('property_images')
           .select('property_id, storage_path, is_primary, sort_order')
@@ -238,12 +239,25 @@ export function PropertyListPage() {
           ? supabase.from('favorites').select('property_id').eq('user_id', user.id).in('property_id', ids)
           : Promise.resolve({ data: null }),
         user
-          ? supabase.from('contact_requests').select('property_id').eq('requester_id', user.id).in('property_id', ids)
+          ? profile?.role === 'agent'
+            ? supabase.from('agent_proposals').select('property_id, status').eq('agent_id', user.id).in('property_id', ids)
+            : supabase.from('contact_requests').select('property_id').eq('requester_id', user.id).in('property_id', ids)
+          : Promise.resolve({ data: null }),
+        user && profile?.role === 'agent'
+          ? supabase.from('commission_share_proposals').select('property_id, status').eq('requesting_agent_id', user.id).in('property_id', ids)
           : Promise.resolve({ data: null }),
       ]);
 
       const favoriteSet = new Set((favs ?? []).map((f: any) => f.property_id));
       const contactedSet = new Set((contacts ?? []).map((c: any) => c.property_id));
+      const statusMap = new Map<string, ProposalStatus>();
+      (contacts ?? []).forEach((c: any) => {
+        if (c.status) statusMap.set(c.property_id, c.status);
+      });
+      (shares ?? []).forEach((s: any) => {
+        contactedSet.add(s.property_id);
+        statusMap.set(s.property_id, s.status);
+      });
 
       const coverMap = new Map<string, string>();
       (images ?? []).forEach((img: any) => {
@@ -263,6 +277,7 @@ export function PropertyListPage() {
         viewsCount: viewCountMap.get(p.id) ?? 0,
         isFavorite: favoriteSet.has(p.id),
         isContacted: contactedSet.has(p.id),
+        proposalStatus: statusMap.get(p.id) ?? null,
       }));
 
       if (sort === 'most_viewed') {
@@ -289,6 +304,7 @@ export function PropertyListPage() {
     amenitiesParam,
     sort,
     user,
+    profile,
   ]);
 
   const resultsLabel = useMemo(() => {
@@ -527,6 +543,7 @@ export function PropertyListPage() {
                   isAgentListed={p.isAgentListed}
                   initialFavorite={p.isFavorite}
                   initialContacted={p.isContacted}
+                  proposalStatus={p.proposalStatus}
                 />
               ))}
             </div>

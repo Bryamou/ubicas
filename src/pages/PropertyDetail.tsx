@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import type { Property } from '@/types/database';
+import type { Property, ProposalStatus } from '@/types/database';
 
 const typeLabels: Record<string, string> = {
   apartment: 'Departamento',
@@ -54,6 +54,7 @@ export function PropertyDetailPage() {
   const [isFavorite, setIsFavorite] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
   const [contacted, setContacted] = useState(false);
+  const [proposalStatus, setProposalStatus] = useState<ProposalStatus | null>(null);
   const [visitOpen, setVisitOpen] = useState(false);
   const [visitDate, setVisitDate] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -110,13 +111,28 @@ export function PropertyDetailPage() {
           .maybeSingle();
         setIsFavorite(!!fav);
 
-        const { data: existingContact } = await supabase
-          .from('contact_requests')
-          .select('id')
-          .eq('property_id', id)
-          .eq('requester_id', user.id)
-          .maybeSingle();
-        setContacted(!!existingContact);
+        if (profile?.role === 'agent') {
+          const [{ data: proposal }, { data: share }] = await Promise.all([
+            supabase.from('agent_proposals').select('id, status').eq('property_id', id).eq('agent_id', user.id).maybeSingle(),
+            supabase
+              .from('commission_share_proposals')
+              .select('id, status')
+              .eq('property_id', id)
+              .eq('requesting_agent_id', user.id)
+              .maybeSingle(),
+          ]);
+          const active = proposal ?? share;
+          setContacted(!!active);
+          setProposalStatus(active?.status ?? null);
+        } else {
+          const { data: existingContact } = await supabase
+            .from('contact_requests')
+            .select('id')
+            .eq('property_id', id)
+            .eq('requester_id', user.id)
+            .maybeSingle();
+          setContacted(!!existingContact);
+        }
       } else {
         setContacted(getContactedPropertyIds().has(id));
       }
@@ -358,6 +374,7 @@ export function PropertyDetailPage() {
         onClose={() => setContactOpen(false)}
         property={property}
         alreadyContacted={contacted}
+        existingProposalStatus={proposalStatus}
         onContacted={() => setContacted(true)}
       />
 

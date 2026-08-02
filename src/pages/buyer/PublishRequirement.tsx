@@ -86,7 +86,7 @@ export function PublishRequirementPage() {
       setFeedback(error.message);
       return;
     }
-    navigate('/panel/comprador/requerimientos');
+    navigate(profile.role === 'agent' ? '/panel/agente/clientes' : '/panel/comprador/requerimientos');
   };
 
   return (

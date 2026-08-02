@@ -18,6 +18,7 @@ import { PublishWizardPage } from '@/pages/owner/PublishWizard';
 import { AgentPanelLayout } from '@/layouts/AgentPanelLayout';
 import { AgentDashboardPage } from '@/pages/agent/AgentDashboard';
 import { AgentPropertiesPage } from '@/pages/agent/AgentProperties';
+import { AgentClientsPage } from '@/pages/agent/AgentClients';
 import { AgentProposalsPage } from '@/pages/agent/AgentProposals';
 import { AgentProfilePage } from '@/pages/agent/AgentProfile';
 import { RequirementsListPage } from '@/pages/RequirementsList';
@@ -57,9 +58,18 @@ export function App() {
             <Route path="/admin/agentes" element={<AdminAgentsPage />} />
           </Route>
 
+          {/* Publicar inmueble: propietario o agente */}
+          <Route element={<ProtectedRoute allowedRoles={['owner', 'agent']} />}>
+            <Route path="/publicar-inmueble" element={<PublishWizardPage />} />
+          </Route>
+
+          {/* Publicar requerimiento: comprador o agente (en nombre de un cliente) */}
+          <Route element={<ProtectedRoute allowedRoles={['buyer', 'agent']} />}>
+            <Route path="/publicar-requerimiento" element={<PublishRequirementPage />} />
+          </Route>
+
           {/* Protegidas por rol: propietario (HU-01 a HU-07) */}
           <Route element={<ProtectedRoute allowedRoles={['owner']} />}>
-            <Route path="/publicar-inmueble" element={<PublishWizardPage />} />
             <Route path="/panel/propietario" element={<OwnerPanelLayout />}>
               <Route index element={<OwnerDashboardPage />} />
               <Route path="inmuebles" element={<OwnerPropertiesPage />} />
@@ -76,6 +86,7 @@ export function App() {
             <Route path="/panel/agente" element={<AgentPanelLayout />}>
               <Route index element={<AgentDashboardPage />} />
               <Route path="inmuebles" element={<AgentPropertiesPage />} />
+              <Route path="clientes" element={<AgentClientsPage />} />
               <Route path="favoritos" element={<FavoritesPage />} />
               <Route path="propuestas" element={<AgentProposalsPage />} />
               <Route path="perfil" element={<AgentProfilePage />} />
@@ -84,7 +95,6 @@ export function App() {
 
           {/* Protegidas por rol: comprador/arrendatario (Fase 3) */}
           <Route element={<ProtectedRoute allowedRoles={['buyer']} />}>
-            <Route path="/publicar-requerimiento" element={<PublishRequirementPage />} />
             <Route path="/panel/comprador" element={<BuyerPanelLayout />}>
               <Route index element={<FavoritesPage />} />
               <Route path="contactos" element={<BuyerContactsPage />} />

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Handshake, Send } from 'lucide-react';
+import { Handshake, Send, Search, Users } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAgentProposals, useAgentRequirementProposals } from '@/hooks/useAgentData';
@@ -31,19 +31,26 @@ export function AgentProposalsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex gap-2 border-b border-border">
-        <button
-          onClick={() => setTab('properties')}
-          className={`border-b-2 px-3 py-2 text-sm font-semibold ${tab === 'properties' ? 'border-brand text-brand' : 'border-transparent text-ink-light'}`}
-        >
-          A propietarios ({proposals.length})
-        </button>
-        <button
-          onClick={() => setTab('requirements')}
-          className={`border-b-2 px-3 py-2 text-sm font-semibold ${tab === 'requirements' ? 'border-brand text-brand' : 'border-transparent text-ink-light'}`}
-        >
-          A compradores ({reqProposals.length})
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-0">
+        <div className="flex gap-2">
+          <button
+            onClick={() => setTab('properties')}
+            className={`border-b-2 px-3 py-2 text-sm font-semibold ${tab === 'properties' ? 'border-brand text-brand' : 'border-transparent text-ink-light'}`}
+          >
+            A propietarios ({proposals.length})
+          </button>
+          <button
+            onClick={() => setTab('requirements')}
+            className={`border-b-2 px-3 py-2 text-sm font-semibold ${tab === 'requirements' ? 'border-brand text-brand' : 'border-transparent text-ink-light'}`}
+          >
+            A compradores ({reqProposals.length})
+          </button>
+        </div>
+        <Link to={tab === 'properties' ? '/inmuebles' : '/requerimientos'} className="mb-2">
+          <Button variant="primary" icon={tab === 'properties' ? <Search size={16} /> : <Users size={16} />}>
+            {tab === 'properties' ? 'Buscar inmuebles para proponerme' : 'Buscar clientes'}
+          </Button>
+        </Link>
       </div>
 
       {tab === 'properties' &&
@@ -118,7 +125,9 @@ export function AgentProposalsPage() {
               <div key={p.id} className="rounded-card border border-border bg-white p-5 shadow-card">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="font-semibold text-ink">{p.requirementSummary}</p>
+                    <Link to={`/requerimientos/${p.requirement_id}`} className="font-semibold text-ink hover:underline">
+                      {p.requirementSummary}
+                    </Link>
                     <p className="text-xs text-ink-light">Comprador: {p.buyerName}</p>
                   </div>
                   <StatusBadge status={p.status} />

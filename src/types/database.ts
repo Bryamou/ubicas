@@ -91,6 +91,18 @@ export interface AgentProposal {
   resolved_at: string | null;
 }
 
+export interface CommissionShareProposal {
+  id: string;
+  property_id: string;
+  requesting_agent_id: string;
+  assigned_agent_id: string;
+  share_percent: number;
+  message: string | null;
+  status: ProposalStatus;
+  created_at: string;
+  resolved_at: string | null;
+}
+
 export type RequirementUrgency = 'asap' | 'within_30_days' | '1_3_months' | 'more_than_3_months' | 'flexible';
 
 export interface Requirement {
@@ -136,6 +148,7 @@ export interface RequirementAgentProposal {
   agent_id: string;
   buyer_id: string;
   pitch: string;
+  shown_property_ids: string[] | null;
   status: ProposalStatus;
   created_at: string;
   resolved_at: string | null;

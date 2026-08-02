@@ -329,7 +329,7 @@ export function PublishWizardPage() {
             >
               Publicar otro inmueble
             </Button>
-            <Link to="/panel/propietario">
+            <Link to={profile?.role === 'agent' ? '/panel/agente/inmuebles' : '/panel/propietario'}>
               <Button variant="neutral" fullWidth>
                 Ir a mi panel
               </Button>
