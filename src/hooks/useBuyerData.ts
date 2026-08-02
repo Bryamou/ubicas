@@ -7,7 +7,6 @@ import type {
   RequirementAgentProposal,
   RequirementStatus,
   ContactRequest,
-  VisitRequest,
 } from '@/types/database';
 
 export interface FavoritePropertyRow extends Property {
@@ -80,38 +79,23 @@ export interface BuyerContactRow extends ContactRequest {
   propertyTitle: string;
   propertyOwnerId: string | null;
 }
-export interface BuyerVisitRow extends VisitRequest {
-  propertyTitle: string;
-  propertyOwnerId: string | null;
-}
 
-export function useBuyerContactsAndVisits(buyerId: string | undefined) {
+export function useBuyerContacts(buyerId: string | undefined) {
   const [contacts, setContacts] = useState<BuyerContactRow[]>([]);
-  const [visits, setVisits] = useState<BuyerVisitRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     if (!buyerId) return;
     setLoading(true);
 
-    const [{ data: contactRows }, { data: visitRows }] = await Promise.all([
-      supabase
-        .from('contact_requests')
-        .select('*, property:properties(title, owner_id)')
-        .eq('requester_id', buyerId)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('visit_requests')
-        .select('*, property:properties(title, owner_id)')
-        .eq('requester_id', buyerId)
-        .order('created_at', { ascending: false }),
-    ]);
+    const { data: contactRows } = await supabase
+      .from('contact_requests')
+      .select('*, property:properties(title, owner_id)')
+      .eq('requester_id', buyerId)
+      .order('created_at', { ascending: false });
 
     setContacts(
       (contactRows ?? []).map((c: any) => ({ ...c, propertyTitle: c.property?.title ?? '', propertyOwnerId: c.property?.owner_id ?? null }))
-    );
-    setVisits(
-      (visitRows ?? []).map((v: any) => ({ ...v, propertyTitle: v.property?.title ?? '', propertyOwnerId: v.property?.owner_id ?? null }))
     );
     setLoading(false);
   }, [buyerId]);
@@ -120,7 +104,7 @@ export function useBuyerContactsAndVisits(buyerId: string | undefined) {
     refresh();
   }, [refresh]);
 
-  return { contacts, visits, loading, refresh };
+  return { contacts, loading, refresh };
 }
 
 export function useBuyerRequirements(buyerId: string | undefined) {

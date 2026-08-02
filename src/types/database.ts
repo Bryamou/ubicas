@@ -154,12 +154,14 @@ export interface RequirementAgentProposal {
   resolved_at: string | null;
 }
 
+export type ContactStatus = 'attended' | 'following_up' | 'discarded' | 'visiting' | 'closing' | 'closed';
+
 export interface ContactRequest {
   id: string;
   property_id: string;
   requester_id: string | null;
   message: string | null;
-  status: 'pending' | 'attended';
+  status: ContactStatus;
   guest_name: string | null;
   guest_email: string | null;
   guest_phone: string | null;

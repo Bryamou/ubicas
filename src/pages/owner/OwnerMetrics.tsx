@@ -18,7 +18,7 @@ export function OwnerMetricsPage() {
       <EmptyState
         icon={<BarChart3 size={28} />}
         title="Aún no hay métricas"
-        description="Publica un inmueble para empezar a ver vistas, contactos y visitas."
+        description="Publica un inmueble para empezar a ver vistas y contactos."
       />
     );
   }
@@ -28,15 +28,13 @@ export function OwnerMetricsPage() {
     { key: 'status', header: 'Estado', render: (r) => <StatusBadge status={r.status} /> },
     { key: 'views', header: 'Vistas', render: (r) => r.viewsCount },
     { key: 'contacts', header: 'Contactos', render: (r) => r.contactsCount },
-    { key: 'visits', header: 'Solicitudes de visita', render: (r) => r.visitsCount },
     { key: 'proposals', header: 'Propuestas pendientes', render: (r) => r.pendingProposalsCount },
   ];
 
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-ink-light">
-        Desempeño de cada inmueble: vistas totales, contactos recibidos, solicitudes de visita y propuestas de
-        agentes pendientes.
+        Desempeño de cada inmueble: vistas totales, contactos recibidos y propuestas de agentes pendientes.
       </p>
       <AdminTable columns={columns} rows={properties} getRowKey={(r) => r.id} />
     </div>

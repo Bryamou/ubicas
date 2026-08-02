@@ -9,7 +9,7 @@ const items: SidebarItem[] = [
   { to: '/panel/propietario', label: 'Resumen', icon: LayoutGrid, end: true },
   { to: '/panel/propietario/inmuebles', label: 'Mis inmuebles', icon: Building2 },
   { to: '/panel/propietario/favoritos', label: 'Favoritos', icon: Heart },
-  { to: '/panel/propietario/contactos', label: 'Contactos y visitas', icon: MessagesSquare },
+  { to: '/panel/propietario/contactos', label: 'Contactos', icon: MessagesSquare },
   { to: '/panel/propietario/propuestas', label: 'Propuestas de agentes', icon: Handshake },
   { to: '/panel/propietario/metricas', label: 'Métricas', icon: BarChart3 },
   { to: '/panel/propietario/perfil', label: 'Mi perfil', icon: UserCircle },

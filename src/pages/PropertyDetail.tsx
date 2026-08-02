@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Heart, MessageCircle, CalendarCheck, MapPin, ShieldCheck, User } from 'lucide-react';
+import { Heart, MessageCircle, MapPin, ShieldCheck, User } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getPublicImageUrl } from '@/lib/storage';
 import { getDistrictCoords } from '@/lib/limaDistricts';
@@ -10,8 +10,6 @@ import { getContactedPropertyIds } from '@/lib/guestContact';
 import { useAuth } from '@/contexts/AuthContext';
 import { Navbar } from '@/components/Navbar';
 import { Button } from '@/components/ui/Button';
-import { Modal } from '@/components/ui/Modal';
-import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -55,8 +53,6 @@ export function PropertyDetailPage() {
   const [contactOpen, setContactOpen] = useState(false);
   const [contacted, setContacted] = useState(false);
   const [proposalStatus, setProposalStatus] = useState<ProposalStatus | null>(null);
-  const [visitOpen, setVisitOpen] = useState(false);
-  const [visitDate, setVisitDate] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -150,22 +146,6 @@ export function PropertyDetailPage() {
       await supabase.from('favorites').insert({ property_id: property.id, user_id: user.id });
     }
     setIsFavorite(!isFavorite);
-  };
-
-  const submitVisit = async () => {
-    if (!user || !property || !visitDate) return;
-    setSaving(true);
-    const { error } = await supabase.from('visit_requests').insert({
-      property_id: property.id,
-      requester_id: user.id,
-      proposed_date: new Date(visitDate).toISOString(),
-    });
-    setSaving(false);
-    if (!error) {
-      setFeedback('Tu solicitud de visita fue enviada. Te notificaremos cuando sea respondida.');
-      setVisitOpen(false);
-      setVisitDate('');
-    }
   };
 
   if (loading) {
@@ -325,9 +305,6 @@ export function PropertyDetailPage() {
                   >
                     {contacted ? 'Ver contacto' : 'Contactar'}
                   </Button>
-                  <Button variant="secondary" icon={<CalendarCheck size={16} />} fullWidth onClick={() => setVisitOpen(true)}>
-                    Solicitar visita
-                  </Button>
                   <Button
                     variant={isFavorite ? 'primary' : 'neutral'}
                     icon={<Heart size={16} fill={isFavorite ? 'currentColor' : 'none'} />}
@@ -377,24 +354,6 @@ export function PropertyDetailPage() {
         existingProposalStatus={proposalStatus}
         onContacted={() => setContacted(true)}
       />
-
-      <Modal
-        open={visitOpen}
-        onClose={() => setVisitOpen(false)}
-        title="Solicitar visita"
-        footer={
-          <Button variant="primary" onClick={submitVisit} loading={saving} disabled={!visitDate}>
-            Enviar solicitud
-          </Button>
-        }
-      >
-        <Input
-          label="Fecha y hora propuesta"
-          type="datetime-local"
-          value={visitDate}
-          onChange={(e) => setVisitDate(e.target.value)}
-        />
-      </Modal>
     </div>
   );
 }

@@ -6,7 +6,6 @@ import type {
   PropertyImage,
   PropertyStatus,
   ContactRequest,
-  VisitRequest,
   AgentProposal,
 } from '@/types/database';
 
@@ -118,16 +117,11 @@ export function useOwnerProperties(ownerId: string | undefined) {
 export interface OwnerContactRow extends ContactRequest {
   propertyTitle: string;
   requesterName: string;
+  requesterPhone: string | null;
 }
 
-export interface OwnerVisitRow extends VisitRequest {
-  propertyTitle: string;
-  requesterName: string;
-}
-
-export function useOwnerContactsAndVisits(ownerId: string | undefined) {
+export function useOwnerContacts(ownerId: string | undefined) {
   const [contacts, setContacts] = useState<OwnerContactRow[]>([]);
-  const [visits, setVisits] = useState<OwnerVisitRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
@@ -144,36 +138,22 @@ export function useOwnerContactsAndVisits(ownerId: string | undefined) {
 
     if (propertyIds.length === 0) {
       setContacts([]);
-      setVisits([]);
       setLoading(false);
       return;
     }
 
-    const [{ data: contactRows }, { data: visitRows }] = await Promise.all([
-      supabase
-        .from('contact_requests')
-        .select('*, requester:profiles!contact_requests_requester_id_fkey(full_name)')
-        .in('property_id', propertyIds)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('visit_requests')
-        .select('*, requester:profiles!visit_requests_requester_id_fkey(full_name)')
-        .in('property_id', propertyIds)
-        .order('created_at', { ascending: false }),
-    ]);
+    const { data: contactRows } = await supabase
+      .from('contact_requests')
+      .select('*, requester:profiles!contact_requests_requester_id_fkey(full_name, phone)')
+      .in('property_id', propertyIds)
+      .order('created_at', { ascending: false });
 
     setContacts(
       (contactRows ?? []).map((c: any) => ({
         ...c,
         propertyTitle: titleMap.get(c.property_id) ?? '',
         requesterName: c.requester?.full_name ?? c.guest_name ?? 'Usuario',
-      }))
-    );
-    setVisits(
-      (visitRows ?? []).map((v: any) => ({
-        ...v,
-        propertyTitle: titleMap.get(v.property_id) ?? '',
-        requesterName: v.requester?.full_name ?? 'Usuario',
+        requesterPhone: c.requester?.phone ?? c.guest_phone ?? null,
       }))
     );
     setLoading(false);
@@ -183,17 +163,12 @@ export function useOwnerContactsAndVisits(ownerId: string | undefined) {
     refresh();
   }, [refresh]);
 
-  const markContactAttended = async (id: string) => {
-    await supabase.from('contact_requests').update({ status: 'attended' }).eq('id', id);
+  const updateContactStatus = async (id: string, status: ContactRequest['status']) => {
+    await supabase.from('contact_requests').update({ status }).eq('id', id);
     await refresh();
   };
 
-  const updateVisitStatus = async (id: string, status: VisitRequest['status']) => {
-    await supabase.from('visit_requests').update({ status }).eq('id', id);
-    await refresh();
-  };
-
-  return { contacts, visits, loading, refresh, markContactAttended, updateVisitStatus };
+  return { contacts, loading, refresh, updateContactStatus };
 }
 
 export interface OwnerProposalRow extends AgentProposal {

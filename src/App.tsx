@@ -86,6 +86,7 @@ export function App() {
             <Route path="/panel/agente" element={<AgentPanelLayout />}>
               <Route index element={<AgentDashboardPage />} />
               <Route path="inmuebles" element={<AgentPropertiesPage />} />
+              <Route path="contactos" element={<OwnerContactsPage />} />
               <Route path="clientes" element={<AgentClientsPage />} />
               <Route path="favoritos" element={<FavoritesPage />} />
               <Route path="propuestas" element={<AgentProposalsPage />} />

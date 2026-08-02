@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Eye, Pencil, ExternalLink } from 'lucide-react';
+import { Search, Eye, Pencil, ExternalLink, MessageSquare } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOwnerProperties, type OwnerPropertyRow } from '@/hooks/useOwnerProperties';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -28,15 +28,20 @@ function formatPrice(p: OwnerPropertyRow) {
 }
 
 // Transiciones válidas de estado disponibles como botones rápidos por fila.
-function availableActions(status: PropertyStatus): { label: string; next: PropertyStatus }[] {
+// "Marcar vendido" solo aplica a venta; "Marcar alquilado" solo a alquiler.
+function availableActions(
+  status: PropertyStatus,
+  operation: 'sale' | 'rent'
+): { label: string; next: PropertyStatus }[] {
   switch (status) {
     case 'draft':
       return [{ label: 'Publicar', next: 'published' }];
     case 'published':
       return [
         { label: 'Pausar', next: 'paused' },
-        { label: 'Marcar vendido', next: 'sold' },
-        { label: 'Marcar alquilado', next: 'rented' },
+        operation === 'sale'
+          ? { label: 'Marcar vendido', next: 'sold' as PropertyStatus }
+          : { label: 'Marcar alquilado', next: 'rented' as PropertyStatus },
         { label: 'Cerrar', next: 'closed' },
       ];
     case 'paused':
@@ -112,62 +117,65 @@ export function OwnerPropertiesPage() {
       ) : (
         <div className="flex flex-col gap-3">
           {filtered.map((p) => (
-            <div
-              key={p.id}
-              className="flex flex-col gap-4 rounded-card border border-border bg-white p-4 shadow-card sm:flex-row sm:items-center"
-            >
-              <div className="h-24 w-full shrink-0 overflow-hidden rounded-input bg-surface-muted sm:w-32">
-                {p.coverImageUrl ? (
-                  <img src={p.coverImageUrl} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-xs text-ink-light">Sin fotos</div>
-                )}
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="truncate font-semibold text-ink">{p.title}</h3>
-                  <StatusBadge status={p.status} />
-                </div>
-                <p className="text-sm text-ink-light">
-                  {p.operation === 'sale' ? 'Venta' : 'Alquiler'} · {p.district} · {formatPrice(p)}
-                </p>
-                <p className="mt-1 text-xs text-ink-light">
-                  {p.published_at
-                    ? `Publicado el ${new Date(p.published_at).toLocaleDateString('es-PE')}`
-                    : 'Aún no publicado'}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-3 text-xs text-ink-light">
-                  <span>{p.viewsCount} vistas</span>
-                  <span>{p.contactsCount} contactos</span>
-                  <span>{p.visitsCount} visitas</span>
-                  {p.pendingProposalsCount > 0 && (
-                    <span className="font-semibold text-brand">
-                      {p.pendingProposalsCount} propuestas pendientes
-                    </span>
+            <div key={p.id} className="rounded-card border border-border bg-white p-4 shadow-card">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                <div className="h-24 w-full shrink-0 overflow-hidden rounded-input bg-surface-muted sm:w-32">
+                  {p.coverImageUrl ? (
+                    <img src={p.coverImageUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-xs text-ink-light">Sin fotos</div>
                   )}
                 </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="truncate font-semibold text-ink">{p.title}</h3>
+                    <StatusBadge status={p.status} />
+                  </div>
+                  <p className="text-sm text-ink-light">
+                    {p.operation === 'sale' ? 'Venta' : 'Alquiler'} · {p.district} · {formatPrice(p)}
+                  </p>
+                  <p className="mt-1 text-xs text-ink-light">
+                    {p.published_at
+                      ? `Publicado el ${new Date(p.published_at).toLocaleDateString('es-PE')}`
+                      : 'Aún no publicado'}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-3 text-xs text-ink-light">
+                    <span>{p.viewsCount} vistas</span>
+                    <span>{p.contactsCount} contactos</span>
+                    {p.pendingProposalsCount > 0 && (
+                      <span className="font-semibold text-brand">
+                        {p.pendingProposalsCount} propuestas pendientes
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              <div className="flex shrink-0 flex-wrap gap-2 sm:flex-col sm:items-stretch">
+              {/* Fila compacta de acciones: mismo tamaño y forma para todas, envuelven en vez de apilarse */}
+              <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-3">
                 <Link to={`/publicar-inmueble?edit=${p.id}`}>
-                  <Button variant="neutral" size="sm" icon={<Pencil size={14} />} fullWidth>
+                  <Button variant="neutral" size="sm" icon={<Pencil size={14} />}>
                     Editar
                   </Button>
                 </Link>
                 {p.status === 'published' && (
                   <Link to={`/inmuebles/${p.id}`} target="_blank">
-                    <Button variant="neutral" size="sm" icon={<ExternalLink size={14} />} fullWidth>
+                    <Button variant="neutral" size="sm" icon={<ExternalLink size={14} />}>
                       Ver publicación
                     </Button>
                   </Link>
                 )}
-                {availableActions(p.status).map((action) => (
+                <Link to={`/panel/propietario/contactos?property=${p.id}`}>
+                  <Button variant="neutral" size="sm" icon={<MessageSquare size={14} />}>
+                    Contactos
+                  </Button>
+                </Link>
+                {availableActions(p.status, p.operation).map((action) => (
                   <Button
                     key={action.next}
                     variant={action.next === 'closed' ? 'danger' : 'secondary'}
                     size="sm"
-                    fullWidth
                     onClick={() => setPendingChange({ id: p.id, next: action.next, label: action.label })}
                   >
                     {action.label}

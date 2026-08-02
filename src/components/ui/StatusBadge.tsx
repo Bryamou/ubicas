@@ -29,6 +29,10 @@ const statusToneMap: Record<string, StatusTone> = {
   completed: 'success',
   active: 'success',
   attended: 'info',
+  following_up: 'warning',
+  discarded: 'danger',
+  visiting: 'brand',
+  closing: 'info',
 };
 
 const statusLabelMap: Record<string, string> = {
@@ -44,6 +48,10 @@ const statusLabelMap: Record<string, string> = {
   completed: 'Completada',
   active: 'Activo',
   attended: 'Atendido',
+  following_up: 'En seguimiento',
+  discarded: 'Descartado',
+  visiting: 'En visita',
+  closing: 'Por concretar',
 };
 
 /** Si se pasa `status` (código interno), se traduce automáticamente al español
